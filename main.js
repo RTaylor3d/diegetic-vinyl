@@ -98,7 +98,7 @@ scene.environmentIntensity = 2;
 
 // Add camera
 const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 20);
-camera.position.set(0, 0, 20);
+camera.position.set(0, 1.25, 0);
 
 const intMan = new InteractionManager(renderer, camera, renderer.domElement);
 
