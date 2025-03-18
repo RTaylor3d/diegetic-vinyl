@@ -87,7 +87,7 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.outputColorspace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x212121);
-renderer.setPixelRatio(window.devicePixelRatio * 2);
+renderer.setPixelRatio(window.devicePixelRatio * 1.5);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 document.body.appendChild(renderer.domElement);
