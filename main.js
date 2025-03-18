@@ -142,7 +142,10 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
         localAxis.applyQuaternion(pitchBone.quaternion);
         targetQuat.setFromAxisAngle(localAxis, 0.05);
         pitchTarget.copy(pitchBone.quaternion).multiply(targetQuat);
-        trackQueue[currentTrackIndex].stop();
+        if(trackQueue.length > 0){
+            trackQueue[currentTrackIndex].stop();
+        }
+        
     
         // Attach global mouseup listener to document
         document.addEventListener('mouseup', onMouseUp);
@@ -175,18 +178,6 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     speedDial.addEventListener('mouseout', () => {
         document.body.style.cursor = 'default';
     });
-
-    record.addEventListener('click', (event) => {
-        getFile();
-    });
-    
-    record.addEventListener('mouseover', () => {
-        document.body.style.cursor = 'pointer';
-    });
-    record.addEventListener('mouseout', () => {
-        document.body.style.cursor = 'default';
-    });
-
 
 });
 
@@ -237,6 +228,10 @@ controls.minDistance = 0.3;
 controls.maxPolarAngle = 1.2;
 controls.target = new THREE.Vector3(0, 0.1, 0);
 controls.update();
+
+document.getElementById("loadTracksBtn").addEventListener('click', () => {
+    getFile();
+});
 
 document.addEventListener('mousemove', (event) => {
     if(isDragging){        
@@ -329,7 +324,7 @@ function render(){
                 needleLifted = true;
                 //seekToPosition();
             }
-            if(!trackQueue[currentTrackIndex].playing() && !needleLifted){
+            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted){
                 trackQueue[currentTrackIndex].play()
             }
         }
