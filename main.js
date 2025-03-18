@@ -191,8 +191,8 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
 const light = new THREE.DirectionalLight(0xC67385, 3.25)
 light.position.set(-1, 4, -1);
 light.castShadow = true;
-light.shadow.mapSize.width = 2048;
-light.shadow.mapSize.height = 2048;
+light.shadow.mapSize.width = 1024;
+light.shadow.mapSize.height = 1024;
 light.shadow.camera.near = 0.1;
 light.shadow.camera.far = 7;
 light.shadow.camera.left = -2;
@@ -201,14 +201,14 @@ light.shadow.camera.top = 2;
 light.shadow.camera.bottom = -2;
 light.shadow.bias = -0.0005;
 light.shadow.radius = 3;
-light.shadow.blurSamples = 32;
+light.shadow.blurSamples = 16;
 scene.add(light);
 
 const light2 = new THREE.DirectionalLight(0xFFFFF, 1.25)
 light2.position.set(1, 4, 1);
 light2.castShadow = true;
-light2.shadow.mapSize.width = 2048;
-light2.shadow.mapSize.height = 2048;
+light2.shadow.mapSize.width = 1024;
+light2.shadow.mapSize.height = 1024;
 light2.shadow.camera.near = 0.1;
 light2.shadow.camera.far = 7;
 light2.shadow.camera.left = -2;
@@ -217,7 +217,7 @@ light2.shadow.camera.top = 2;
 light2.shadow.camera.bottom = -2;
 light2.shadow.bias = -0.0005;
 light2.shadow.radius = 3;
-light2.shadow.blurSamples = 32;
+light2.shadow.blurSamples = 16;
 scene.add(light2);
 
 const shadowCameraHelper = new THREE.CameraHelper( light.shadow.camera );
@@ -404,7 +404,6 @@ async function getFile() {
 
         for (const file of files) {
             const fileURL = URL.createObjectURL(file);
-            record.visible = true;
             if (!albumArtSet) {
                 const metadata = await parseBlob(file);
                 if (metadata.common.picture && metadata.common.picture.length > 0) {
@@ -413,6 +412,7 @@ async function getFile() {
                         applyAlbumArtToRecord(albumArt);
                     }
                     albumArtSet = true;
+                    record.visible = true;
                 }
             }
 
