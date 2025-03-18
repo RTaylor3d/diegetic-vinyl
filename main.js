@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { InteractionManager } from 'three.interactive';
 import {Howl, Howler} from 'howler';
+import { parseBlob } from 'music-metadata';
 
 // Set up variables
 var meshLoaded = false;
@@ -15,6 +16,7 @@ var rpmMulti = 0;
 var angularVelocity = (rpm * 2 * Math.PI) / 60;
 var platter = null;
 var record = null;
+var recordLabel = null;
 var toneArm = null;
 var speedDial = null;
 var groundPlane = null;
@@ -85,7 +87,7 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.outputColorspace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x212121);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(window.devicePixelRatio * 2);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 document.body.appendChild(renderer.domElement);
@@ -94,7 +96,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const environmentTexture = new THREE.CubeTextureLoader().setPath('./').load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']);
 scene.environment = environmentTexture;
-scene.environmentIntensity = 2;
+scene.environmentIntensity = 2.5;
 
 // Add camera
 const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -115,6 +117,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     scene.add(mesh);
     platter = mesh.getObjectByName("platter");
     record = mesh.getObjectByName("vinyl");
+    recordLabel = mesh.getObjectByName("vinylLabel");
     speedDial = mesh.getObjectByName("dial");
     toneArm = mesh.getObjectByName("toneArm");
     groundPlane = mesh.getObjectByName("ground");
@@ -390,9 +393,21 @@ async function getFile() {
         currentTrackIndex = 0;
 
         let tempTrackList = [];
+        let albumArtSet = false;
 
         for (const file of files) {
             const fileURL = URL.createObjectURL(file);
+
+            if (!albumArtSet) {
+                const metadata = await parseBlob(file);
+                if (metadata.common.picture && metadata.common.picture.length > 0) {
+                    const albumArt = metadata.common.picture[0];
+                    if(albumArt != null){
+                        applyAlbumArtToRecord(albumArt);
+                    }
+                    albumArtSet = true;
+                }
+            }
 
             let newTrack = new Howl({
                 src: [fileURL],
@@ -484,6 +499,25 @@ function seekToPosition() {
             isSeeking = false;
         }, 200); // Allow 0.2 seconds before allowing `onend` again
     }
+}
+
+function applyAlbumArtToRecord(picture) {
+    if (!picture || !record) return;
+
+    const blob = new Blob([picture.data], { type: picture.format });
+    const imageUrl = URL.createObjectURL(blob);
+
+    // Load texture and apply to record material
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(imageUrl, (texture) => {
+        recordLabel.material = new THREE.MeshStandardMaterial({
+            map: texture, 
+            roughness: 0.2, 
+            metalness: 0.0
+        });
+        console.log("Album art applied to record texture!");
+    });
+
 }
 
 function changedSpeed(){
