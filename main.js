@@ -42,6 +42,8 @@ var dragThreshold = 60;
 var posInRecord = 0;
 var recordDuration = 0;
 var armSpeed = 0;
+var armStart = -0.540;
+var armEnd = -0.834;
 
 var dialPos1 = Math.PI / 4.8;  // 33 RPM (2 o'clock)
 var dialPos2 = 0;              // STOP (3 o'clock, default)
@@ -117,6 +119,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     scene.add(mesh);
     platter = mesh.getObjectByName("platter");
     record = mesh.getObjectByName("vinyl");
+    record.visible = false;
     recordLabel = mesh.getObjectByName("vinylLabel");
     speedDial = mesh.getObjectByName("dial");
     toneArm = mesh.getObjectByName("toneArm");
@@ -316,10 +319,13 @@ function render(){
         }        
         angularVelocity = (rpm * 2 * Math.PI) / 60;
 
-        posInRecord = norm(yawBone.rotation.y, -0.545, -0.89); 
+        posInRecord = norm(yawBone.rotation.y, armStart, armEnd); 
         pitchBone.quaternion.slerp(pitchTarget, 0.1);        
-        if(yawBone.rotation.y < -0.545 && yawBone.rotation.y > -0.89 && dragTarget != toneArm){
-            //posInRecord = norm(yawBone.rotation.y, -0.545, -0.89);
+        // Move the needle towards the start point if dropped close to the edge
+        if(yawBone.rotation.y > armStart && yawBone.rotation.y < armStart + 0.02 && !needleLifted){
+            yawBone.rotation.y += ((armSpeed * 10) * deltaTime) * rpmMulti;  
+        }
+        if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
             yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
             if(pitchBone.rotation.x > -1.573){
                 needleLifted = false;
@@ -331,10 +337,10 @@ function render(){
                 trackQueue[currentTrackIndex].play()
             }
         }
-        if(yawBone.rotation.y < -0.89){
+        if(yawBone.rotation.y < armEnd){
             posInRecord = 1;
         }
-        if(yawBone.rotation.y > -0.545){
+        if(yawBone.rotation.y > armStart){
             posInRecord = 0;
         }
         if(isDragging && dragTarget == toneArm){
@@ -377,6 +383,7 @@ function onMouseUp(event) {
 }
 
 async function getFile() {
+    audioLoaded = false;
     try {
         const fileHandles = await window.showOpenFilePicker(trackPickerOpts);
         const files = await Promise.all(fileHandles.map(handle => handle.getFile()));
@@ -397,7 +404,7 @@ async function getFile() {
 
         for (const file of files) {
             const fileURL = URL.createObjectURL(file);
-
+            record.visible = true;
             if (!albumArtSet) {
                 const metadata = await parseBlob(file);
                 if (metadata.common.picture && metadata.common.picture.length > 0) {
@@ -454,7 +461,7 @@ function finalizeTrackQueue(tempTrackList) {
     console.log("Total playlist duration:", totalDuration);
 
     recordDuration = totalDuration;
-    armSpeed = (-0.89 - (-0.545)) / recordDuration;
+    armSpeed = (armEnd - (armStart)) / recordDuration;
     audioLoaded = true;
 }
 
