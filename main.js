@@ -30,12 +30,9 @@ const mouse = new THREE.Vector2();
 var needleLifted = true;
 var isDragging = false;
 var dragStarted = false;
-var refreshPos = true;
-var fullRefresh = true;
 var isSeeking = false;
 var seekTimeout = null;
 var dragTarget = null;
-var dialCooldown = 0;
 var dragStartY = 0;
 var totalDragDistance = 0;
 var dragThreshold = 60;
@@ -44,7 +41,7 @@ var recordDuration = 0;
 var armSpeed = 0;
 var armStart = -0.540;
 var armEnd = -0.834;
-
+var normalizedRotation;
 var dialPos1 = Math.PI / 4.8;  // 33 RPM (2 o'clock)
 var dialPos2 = 0;              // STOP (3 o'clock, default)
 var dialPos3 = -Math.PI / 4.8; // 45 RPM (3 o'clock)
@@ -89,17 +86,18 @@ const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.outputColorspace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x212121);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(window.devicePixelRatio * 1.5);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.75;
 document.body.appendChild(renderer.domElement);
 
 // Set up Scene
 const scene = new THREE.Scene();
 const environmentTexture = new THREE.CubeTextureLoader().setPath('./').load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']);
 scene.environment = environmentTexture;
-scene.environmentIntensity = 2.5;
-
+scene.environmentIntensity = 2;
 // Add camera
 const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 20);
 camera.position.set(0, 1.25, 0);
@@ -192,7 +190,7 @@ const light = new THREE.DirectionalLight(0xC67385, 3.25)
 light.position.set(-1, 4, -1);
 light.castShadow = true;
 light.shadow.mapSize.width = 1024;
-light.shadow.mapSize.height = 1024;
+light.shadow.mapSize.height = 512;
 light.shadow.camera.near = 0.1;
 light.shadow.camera.far = 7;
 light.shadow.camera.left = -2;
@@ -201,7 +199,7 @@ light.shadow.camera.top = 2;
 light.shadow.camera.bottom = -2;
 light.shadow.bias = -0.0005;
 light.shadow.radius = 3;
-light.shadow.blurSamples = 16;
+light.shadow.blurSamples = 8;
 scene.add(light);
 
 const light2 = new THREE.DirectionalLight(0xFFFFF, 1.25)
@@ -217,7 +215,7 @@ light2.shadow.camera.top = 2;
 light2.shadow.camera.bottom = -2;
 light2.shadow.bias = -0.0005;
 light2.shadow.radius = 3;
-light2.shadow.blurSamples = 16;
+light2.shadow.blurSamples = 8;
 scene.add(light2);
 
 const shadowCameraHelper = new THREE.CameraHelper( light.shadow.camera );
@@ -327,13 +325,13 @@ function render(){
         }
         if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
             yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
-            if(pitchBone.rotation.x > -1.573){
+            if(pitchBone.rotation.x > -1.575){
                 needleLifted = false;
             } else {
                 needleLifted = true;
                 //seekToPosition();
             }
-            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted){
+            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.001){
                 trackQueue[currentTrackIndex].play()
             }
         }
@@ -356,6 +354,24 @@ function render(){
 
         platter.rotation.y -= angularVelocity * deltaTime;
         record.rotation.y -= angularVelocity * deltaTime;
+
+        if(yawBone.rotation.y < armStart && dragTarget != toneArm && trackQueue.length > 0){
+            normalizedRotation = (record.rotation.y % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+            
+            if(normalizedRotation < 6.2 && normalizedRotation > 3.1){
+                yawBone.rotation.y -= (((0.01 * deltaTime) * rpmMulti) * 0.25) * (1.7 - posInRecord);
+            }
+            if(normalizedRotation < 3.1 && normalizedRotation > 0){
+                yawBone.rotation.y += (((0.01 * deltaTime) * rpmMulti) * 0.25) * (1.7 - posInRecord);
+            }
+
+            if(normalizedRotation < 6&& normalizedRotation > 5.3){
+                pitchBone.rotation.x -= (((0.1 * deltaTime) * rpmMulti) * 0.5) * (1.1 - posInRecord);
+            }
+            if(normalizedRotation < 5.3 && normalizedRotation > 4.6){
+                pitchBone.rotation.x += (((0.1 * deltaTime) * rpmMulti) * 0.5) * (1.1 - posInRecord);
+            }
+        }
     }
     
     intMan.update();
@@ -474,6 +490,7 @@ function playNextTrack() {
         //console.log("Playlist finished.");
         currentTrackIndex = trackQueue.length - 1; // Stay on the last track
     }
+
 }
 
 function seekToPosition() {
