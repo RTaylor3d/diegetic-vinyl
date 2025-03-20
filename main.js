@@ -17,6 +17,7 @@ var angularVelocity = (rpm * 2 * Math.PI) / 60;
 var platter = null;
 var record = null;
 var recordLabel = null;
+var sleeve = null;
 var toneArm = null;
 var speedDial = null;
 var groundPlane = null;
@@ -97,7 +98,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const environmentTexture = new THREE.CubeTextureLoader().setPath('./').load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']);
 scene.environment = environmentTexture;
-scene.environmentIntensity = 2;
+scene.environmentIntensity = 1.5;
 // Add camera
 const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 20);
 camera.position.set(0, 1.25, 0);
@@ -130,7 +131,6 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     intMan.add(toneArm); 
     intMan.add(speedDial);   
     intMan.add(record);
-    meshLoaded = true;
 
     toneArm.addEventListener('mousedown', (event) => {
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -183,7 +183,25 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
         document.body.style.cursor = 'default';
     });
 
+    meshLoaded = true;
+
 });
+
+loader.load('sleeve_01.glb', (gltf) => {
+    gltf.scene.traverse( function( child ) { 
+        if ( child.isMesh ) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.frustumCulled = false;
+        }
+    });  
+    
+    const mesh = gltf.scene;
+    scene.add(mesh);
+    sleeve = mesh.getObjectByName("sleeve");
+});
+
+
 
 // Add lights
 const light = new THREE.DirectionalLight(0xC67385, 3.25)
@@ -321,7 +339,7 @@ function render(){
         pitchBone.quaternion.slerp(pitchTarget, 0.1);        
         // Move the needle towards the start point if dropped close to the edge
         if(yawBone.rotation.y > armStart && yawBone.rotation.y < armStart + 0.02 && !needleLifted){
-            yawBone.rotation.y += ((armSpeed * 10) * deltaTime) * rpmMulti;  
+            yawBone.rotation.y += ((armSpeed * 25) * deltaTime) * rpmMulti;  
         }
         if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
             yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
@@ -537,6 +555,12 @@ function applyAlbumArtToRecord(picture) {
         recordLabel.material = new THREE.MeshStandardMaterial({
             map: texture, 
             roughness: 0.2, 
+            metalness: 0.0
+        });
+
+        sleeve.material = new THREE.MeshStandardMaterial({
+            map: texture, 
+            roughness: 0.3, 
             metalness: 0.0
         });
         console.log("Album art applied to record texture!");
