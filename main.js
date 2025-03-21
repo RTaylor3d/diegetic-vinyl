@@ -1,4 +1,4 @@
-import * as THREE from './node_modules/three/build/three.module.js';
+import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { InteractionManager } from 'three.interactive';
@@ -37,7 +37,7 @@ var seekTimeout = null;
 var dragTarget = null;
 var dragStartY = 0;
 var totalDragDistance = 0;
-var dragThreshold = 32;
+var dragThreshold = 30;
 var posInRecord = 0;
 var recordDuration = 0;
 var armSpeed = 0;
