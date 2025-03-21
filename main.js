@@ -36,7 +36,7 @@ var seekTimeout = null;
 var dragTarget = null;
 var dragStartY = 0;
 var totalDragDistance = 0;
-var dragThreshold = 60;
+var dragThreshold = 35;
 var posInRecord = 0;
 var recordDuration = 0;
 var armSpeed = 0;
@@ -48,8 +48,6 @@ var dialPos2 = 0;              // STOP (3 o'clock, default)
 var dialPos3 = -Math.PI / 4.8; // 45 RPM (3 o'clock)
 var dialPos4 = -Math.PI / 2;   // 78 RPM (4 o'clock)
 
-var lastDialTarget = dialPos2;
-var trackHandler;
 const trackPickerOpts = {
     types: [
       {
