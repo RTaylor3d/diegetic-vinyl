@@ -1,5 +1,14 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './',
-})
+  base: './', // ensures relative paths work on GitHub Pages
+  build: {
+    target: 'esnext',
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        format: 'es'
+      }
+    }
+  }
+});
