@@ -366,7 +366,13 @@ function render(){
         rpmMulti = rpm / recordSpeed;
         if(audioLoaded){
             trackQueue[currentTrackIndex].rate(rpmMulti);
-            ambCrackle.rate(rpmMulti);
+            if(ambCrackle.playing()){
+                ambCrackle.rate(rpmMulti);
+            }
+            if(endCrackle.playing()){
+                endCrackle.rate(rpmMulti);
+            }
+
         }        
         angularVelocity = (rpm * 2 * Math.PI) / 60;
 
