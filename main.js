@@ -29,6 +29,7 @@ var pitchClone = null;
 var pitchTarget = new THREE.Quaternion(0, 0, 0, 0);
 const mouse = new THREE.Vector2();
 var needleLifted = true;
+var recordEnded = false;
 var isDragging = false;
 var dragStarted = false;
 var isSeeking = false;
@@ -67,6 +68,36 @@ var trackStartTimes = []; // Cumulative start times of tracks
 var trackQueue = [];  // Holds all Howl tracks
 var currentTrackIndex = 0;
 var totalDuration = 0; // Sum of all tracks' durations
+
+var ambCrackle = new Howl({
+    src: ['./vinyl-crackle-33rpm-6065.mp3'],
+    rate: 1, 
+    volume: 0.4,
+    loop: true
+});
+
+var crackleEnd1 = new Howl({
+    src: ['./record_end_01.mp3'],
+    rate: 1, 
+    volume: 0.3,
+    loop: true
+});
+
+var crackleEnd2 = new Howl({
+    src: ['./record_end_02.mp3'],
+    rate: 1, 
+    volume: 0.3,
+    loop: true
+});
+
+var crackleEnd3 = new Howl({
+    src: ['./record_end_03.mp3'],
+    rate: 1, 
+    volume: 0.3,
+    loop: true
+});
+
+var endCrackle = null;
 /*
 var track = new Howl({
     src: ['./In Waves-01-001-Jamie xx-Wanna.flac']
@@ -89,14 +120,16 @@ renderer.setPixelRatio(window.devicePixelRatio * 1.25);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.75;
+renderer.toneMappingExposure = 1.2;
 document.body.appendChild(renderer.domElement);
 
 // Set up Scene
 const scene = new THREE.Scene();
 const environmentTexture = new THREE.CubeTextureLoader().setPath('./').load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']);
 scene.environment = environmentTexture;
-scene.environmentIntensity = 1.5;
+scene.environmentIntensity = 1.75;
+scene.environmentRotation.y = 3.4;
+
 // Add camera
 const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 20);
 camera.position.set(0, 1.25, 0);
@@ -199,14 +232,12 @@ loader.load('sleeve_01.glb', (gltf) => {
     sleeve = mesh.getObjectByName("sleeve");
 });
 
-
-
 // Add lights
 const light = new THREE.DirectionalLight(0xC67385, 3.25)
 light.position.set(-1, 4, -1);
 light.castShadow = true;
 light.shadow.mapSize.width = 1024;
-light.shadow.mapSize.height = 512;
+light.shadow.mapSize.height = 1024;
 light.shadow.camera.near = 0.1;
 light.shadow.camera.far = 7;
 light.shadow.camera.left = -2;
@@ -214,7 +245,7 @@ light.shadow.camera.right = 2;
 light.shadow.camera.top = 2;
 light.shadow.camera.bottom = -2;
 light.shadow.bias = -0.0005;
-light.shadow.radius = 3;
+light.shadow.radius = 2;
 light.shadow.blurSamples = 8;
 scene.add(light);
 
@@ -230,9 +261,14 @@ light2.shadow.camera.right = 2;
 light2.shadow.camera.top = 2;
 light2.shadow.camera.bottom = -2;
 light2.shadow.bias = -0.0005;
-light2.shadow.radius = 3;
+light2.shadow.radius = 2;
 light2.shadow.blurSamples = 8;
 scene.add(light2);
+
+const light3 = new THREE.DirectionalLight(0xFFFFFF, 0.04)
+light3.position.set(2, 2, -2);
+light3.castShadow = false;
+scene.add(light3);
 
 const shadowCameraHelper = new THREE.CameraHelper( light.shadow.camera );
 //scene.add( shadowCameraHelper );
@@ -256,7 +292,7 @@ document.getElementById("loadTracksBtn").addEventListener('click', () => {
 document.addEventListener('mousemove', (event) => {
     if(isDragging){        
         if (dragTarget == toneArm) {
-            const deltaX = event.movementX * 0.004;
+            const deltaX = event.movementX * 0.001;
             yawTarget += deltaX;
             const minYaw = -Math.PI / 3.5;
             const maxYaw = Math.PI / 20;
@@ -330,6 +366,7 @@ function render(){
         rpmMulti = rpm / recordSpeed;
         if(audioLoaded){
             trackQueue[currentTrackIndex].rate(rpmMulti);
+            ambCrackle.rate(rpmMulti);
         }        
         angularVelocity = (rpm * 2 * Math.PI) / 60;
 
@@ -341,14 +378,37 @@ function render(){
         }
         if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
             yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
-            if(pitchBone.rotation.x > -1.575){
-                needleLifted = false;
-            } else {
-                needleLifted = true;
-                //seekToPosition();
-            }
-            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.001){
+
+            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded){
                 trackQueue[currentTrackIndex].play()
+            }
+        }
+        if(pitchBone.rotation.x > -1.575){
+            needleLifted = false;
+            
+        } else {
+            needleLifted = true;
+            recordEnded = false;
+        }
+        if(trackQueue.length > 0 && yawBone.rotation.y < armStart + 0.02 && !needleLifted && rpm > 1 && !recordEnded){
+            if(!ambCrackle.playing()){
+                ambCrackle.seek(Math.random() * ambCrackle.duration());
+                ambCrackle.play();
+            }
+        } else {
+            ambCrackle.pause();
+        }
+
+        if(audioLoaded && yawBone.rotation.y < armEnd + 0.0005 && !needleLifted && !recordEnded){
+            if(!endCrackle.playing()){
+                recordEnded = true;
+                endCrackle.play();
+                ambCrackle.pause();
+            }
+        }
+        if(audioLoaded && needleLifted){
+            if(endCrackle.playing()){
+                endCrackle.pause();
             }
         }
         if(yawBone.rotation.y < armEnd){
@@ -389,7 +449,7 @@ function render(){
             }
         }
     }
-    
+
     intMan.update();
     controls.update();
     requestAnimationFrame(render);    
@@ -494,6 +554,16 @@ function finalizeTrackQueue(tempTrackList) {
 
     recordDuration = totalDuration;
     armSpeed = (armEnd - (armStart)) / recordDuration;
+    var getEndCrackle = Math.random();
+    if(getEndCrackle < 0.33){
+        endCrackle = crackleEnd1;
+    }
+    if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
+        endCrackle = crackleEnd2;
+    }
+    if(getEndCrackle > 0.66){
+        endCrackle = crackleEnd3;
+    }
     audioLoaded = true;
 }
 
@@ -567,7 +637,6 @@ function applyAlbumArtToRecord(picture) {
 }
 
 function changedSpeed(){
-    //console.log("Changed speed!");
     seekToPosition();
 }
 
