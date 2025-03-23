@@ -33,6 +33,7 @@ var recordEnded = false;
 var isDragging = false;
 var dragStarted = false;
 var isSeeking = false;
+var sceneChanged = false;
 var seekTimeout = null;
 var dragTarget = null;
 var dragStartY = 0;
@@ -66,8 +67,22 @@ const trackPickerOpts = {
 
 var trackStartTimes = []; // Cumulative start times of tracks
 var trackQueue = [];  // Holds all Howl tracks
+var albumCollection = [];
 var currentTrackIndex = 0;
 var totalDuration = 0; // Sum of all tracks' durations
+var recordOffset = 0.00557;
+
+class NewRecord {
+    constructor(artist, name, tracks, duration, startTimes, art, id){
+        this.artist = artist;
+        this.name = name;
+        this.tracks = tracks;
+        this.duration = duration;
+        this.startTimes = startTimes;
+        this.art = art;
+        this.id = id;
+    }
+}
 
 var ambCrackle = new Howl({
     src: ['./vinyl-crackle-33rpm-6065.mp3'],
@@ -98,19 +113,7 @@ var crackleEnd3 = new Howl({
 });
 
 var endCrackle = null;
-/*
-var track = new Howl({
-    src: ['./In Waves-01-001-Jamie xx-Wanna.flac']
-});
 
-track.on('load', function(){
-    recordDuration = track.duration();
-    armSpeed = (-0.89 - (-0.545)) / recordDuration;
-    trackQueue.push(track);
-    console.log(trackQueue[currentTrackIndex]);
-    audioLoaded = true;
-});
-*/
 // Set up Renderer
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.outputColorspace = THREE.SRGBColorSpace;
@@ -120,14 +123,14 @@ renderer.setPixelRatio(window.devicePixelRatio * 1.25);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.2;
+renderer.toneMappingExposure = 1.1;
 document.body.appendChild(renderer.domElement);
 
 // Set up Scene
 const scene = new THREE.Scene();
 const environmentTexture = new THREE.CubeTextureLoader().setPath('./').load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']);
 scene.environment = environmentTexture;
-scene.environmentIntensity = 1.75;
+scene.environmentIntensity = 0.7;
 scene.environmentRotation.y = 3.4;
 
 // Add camera
@@ -153,8 +156,6 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     recordLabel = mesh.getObjectByName("vinylLabel");
     speedDial = mesh.getObjectByName("dial");
     toneArm = mesh.getObjectByName("toneArm");
-    groundPlane = mesh.getObjectByName("ground");
-    groundPlane.material.dithering = true;
     yawBone = mesh.getObjectByName("boneYaw");
     pitchBone = mesh.getObjectByName("bonePitch");
     pitchClone = pitchBone.clone();
@@ -228,12 +229,29 @@ loader.load('sleeve_01.glb', (gltf) => {
     });  
     
     const mesh = gltf.scene;
-    scene.add(mesh);
+    //scene.add(mesh);
     sleeve = mesh.getObjectByName("sleeve");
+    //sleeve.position.set(0.359, 0, -0.011);
+    //sleeve.rotation.y = 0.5;
+});
+
+loader.load('groundPlane_01.glb', (gltf) => {
+    gltf.scene.traverse( function( child ) { 
+        if ( child.isMesh ) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.frustumCulled = false;
+        }
+    });  
+    
+    groundPlane = gltf.scene;
+    const ground = groundPlane.getObjectByName("ground");
+    ground.material.dithering = true;
+    scene.add(groundPlane);
 });
 
 // Add lights
-const light = new THREE.DirectionalLight(0xC67385, 3.25)
+const light = new THREE.DirectionalLight(0xC67385, 4.25)
 light.position.set(-1, 4, -1);
 light.castShadow = true;
 light.shadow.mapSize.width = 1024;
@@ -249,7 +267,7 @@ light.shadow.radius = 2;
 light.shadow.blurSamples = 8;
 scene.add(light);
 
-const light2 = new THREE.DirectionalLight(0xFFFFF, 1.25)
+const light2 = new THREE.DirectionalLight(0xFFFFF, 2.25)
 light2.position.set(1, 4, 1);
 light2.castShadow = true;
 light2.shadow.mapSize.width = 1024;
@@ -279,7 +297,7 @@ controls.enableDamping = true;
 controls.enablePan = false;
 controls.autoRotate = false;
 controls.enableRotate = true;
-controls.maxDistance = 2;
+controls.maxDistance = 1.1;
 controls.minDistance = 0.3;
 controls.maxPolarAngle = 1.2;
 controls.target = new THREE.Vector3(0, 0.1, 0);
@@ -288,6 +306,14 @@ controls.update();
 document.getElementById("loadTracksBtn").addEventListener('click', () => {
     getFile();
 });
+/*
+document.getElementById("changeSceneBtn").addEventListener('click', () => {
+    if(!sceneChanged){
+        loadEnv01();
+        sceneChanged = true;
+    }
+});
+*/
 
 document.addEventListener('mousemove', (event) => {
     if(isDragging){        
@@ -482,6 +508,9 @@ function onMouseUp(event) {
 
 async function getFile() {
     audioLoaded = false;
+    const newRecord = new NewRecord();
+    newRecord.id = Date.now();
+    
     try {
         const fileHandles = await window.showOpenFilePicker(trackPickerOpts);
         const files = await Promise.all(fileHandles.map(handle => handle.getFile()));
@@ -500,6 +529,18 @@ async function getFile() {
         let tempTrackList = [];
         let albumArtSet = false;
 
+        // Add new sleeve
+        const newSleeve = sleeve.clone(true);
+        scene.add(newSleeve);
+        newSleeve.position.set(0.438, 0, -0.227 + (recordOffset * (albumCollection.length + 1)));
+        newSleeve.rotation.x = 1.294;
+        newSleeve.rotation.y = 0;
+        intMan.add(newSleeve);
+        newSleeve.addEventListener('click', (event) =>{
+            loadRecordToDeck(newRecord);
+            event.stopPropagation();
+        })
+        
         for (const file of files) {
             const fileURL = URL.createObjectURL(file);
             if (!albumArtSet) {
@@ -507,10 +548,17 @@ async function getFile() {
                 if (metadata.common.picture && metadata.common.picture.length > 0) {
                     const albumArt = metadata.common.picture[0];
                     if(albumArt != null){
-                        applyAlbumArtToRecord(albumArt);
+                        applyAlbumArtToRecord(albumArt, newSleeve, newRecord);
                     }
                     albumArtSet = true;
                     record.visible = true;
+                }
+                if(metadata.common.albumartist){
+                    newRecord.artist = metadata.common.albumartist;
+                }
+                
+                if(metadata.common.album){
+                    newRecord.name = metadata.common.album;
                 }
             }
 
@@ -526,7 +574,7 @@ async function getFile() {
                     });
 
                     if (tempTrackList.length === files.length) {
-                        finalizeTrackQueue(tempTrackList);
+                        finalizeTrackQueue(tempTrackList, newRecord);
                     }
                 },
                 onend: function () {
@@ -539,38 +587,6 @@ async function getFile() {
     } catch (error) {
         console.error("Error loading files:", error);
     }
-}
-
-function finalizeTrackQueue(tempTrackList) {
-    // Sort tracks by filename (natural order sorting for track numbers)
-    tempTrackList.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true }));
-
-    for (const trackObj of tempTrackList) {
-        let { track, duration } = trackObj;
-
-        trackQueue.push(track);
-        trackStartTimes.push(totalDuration);  
-        totalDuration += duration;
-
-        console.log(`Track: ${trackObj.fileName}, Duration: ${duration}`);
-    }
-
-    console.log("Final Ordered Track Start Times:", trackStartTimes);
-    console.log("Total playlist duration:", totalDuration);
-
-    recordDuration = totalDuration;
-    armSpeed = (armEnd - (armStart)) / recordDuration;
-    var getEndCrackle = Math.random();
-    if(getEndCrackle < 0.33){
-        endCrackle = crackleEnd1;
-    }
-    if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
-        endCrackle = crackleEnd2;
-    }
-    if(getEndCrackle > 0.66){
-        endCrackle = crackleEnd3;
-    }
-    audioLoaded = true;
 }
 
 function playNextTrack() {
@@ -617,7 +633,7 @@ function seekToPosition() {
     }
 }
 
-function applyAlbumArtToRecord(picture) {
+function applyAlbumArtToRecord(picture, albumSleeve, recordClass) {
     if (!picture || !record) return;
 
     const blob = new Blob([picture.data], { type: picture.format });
@@ -628,22 +644,154 @@ function applyAlbumArtToRecord(picture) {
     textureLoader.load(imageUrl, (texture) => {
         recordLabel.material = new THREE.MeshStandardMaterial({
             map: texture, 
-            roughness: 0.2, 
+            roughness: 0.16, 
             metalness: 0.0
         });
 
-        sleeve.material = new THREE.MeshStandardMaterial({
+        albumSleeve.material = new THREE.MeshStandardMaterial({
             map: texture, 
-            roughness: 0.3, 
-            metalness: 0.0
+            roughness: 0.2, 
+            metalness: 0
         });
+
+        recordClass.art = texture;
+        console.log(recordClass);
         console.log("Album art applied to record texture!");
     });
 
 }
 
+function finalizeTrackQueue(tempTrackList, recordClass) {
+    // Sort tracks by filename (natural order sorting for track numbers)
+    tempTrackList.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true }));
+
+    for (const trackObj of tempTrackList) {
+        let { track, duration } = trackObj;
+
+        trackQueue.push(track);
+        trackStartTimes.push(totalDuration);  
+        totalDuration += duration;
+        recordClass.tracks = trackQueue;
+        recordClass.startTimes = trackStartTimes;
+        recordClass.duration = totalDuration;
+        //console.log(`Track: ${trackObj.fileName}, Duration: ${duration}`);
+    }
+
+    //console.log("Final Ordered Track Start Times:", trackStartTimes);
+    //console.log("Total playlist duration:", totalDuration);
+
+    recordDuration = totalDuration;
+    armSpeed = (armEnd - (armStart)) / recordDuration;
+    var getEndCrackle = Math.random();
+    if(getEndCrackle < 0.33){
+        endCrackle = crackleEnd1;
+    }
+    if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
+        endCrackle = crackleEnd2;
+    }
+    if(getEndCrackle > 0.66){
+        endCrackle = crackleEnd3;
+    }
+    audioLoaded = true;
+    albumCollection.push(recordClass);
+    //console.log(albumCollection);
+}
+
 function changedSpeed(){
     seekToPosition();
+}
+
+function loadRecordToDeck(recordObj) {
+    trackQueue = recordObj.tracks;
+    trackStartTimes = recordObj.startTimes;
+    totalDuration = recordObj.duration;
+    currentTrackIndex = 0;
+    audioLoaded = true;
+
+    // Update label & sleeve visuals
+    if (recordObj.art) {
+        recordLabel.material.map = recordObj.art;
+        recordLabel.material.needsUpdate = true;
+
+        sleeve.material.map = recordObj.art;
+        sleeve.material.needsUpdate = true;
+    }
+
+    record.visible = true;
+    console.log("loaded record ", recordObj);
+}
+
+function loadEnv01(){
+
+    scene.remove(light);
+    scene.remove(light2);
+    scene.remove(light3);
+
+    // Adjust environment and tone mapping
+    renderer.toneMappingExposure = 1.2;
+    scene.environmentIntensity = 1;
+
+    // Adjust lights
+    const sc1Light = new THREE.DirectionalLight(0xede2b4, 15)
+    sc1Light.position.set(5.6, 1.5, 6.3);
+    sc1Light.castShadow = true;
+    sc1Light.shadow.mapSize.width = 2048;
+    sc1Light.shadow.mapSize.height = 1024;
+    sc1Light.shadow.camera.near = 0.1;
+    sc1Light.shadow.camera.far = 10;
+    sc1Light.shadow.camera.left = -2;
+    sc1Light.shadow.camera.right = 2;
+    sc1Light.shadow.camera.top = 2;
+    sc1Light.shadow.camera.bottom = -2;
+    sc1Light.shadow.bias = -0.0001;
+    sc1Light.shadow.radius = 4;
+    sc1Light.shadow.blurSamples = 32;
+
+    const sc2Light = new THREE.DirectionalLight(0xb4c6d3, 0.05)
+    sc2Light.position.set(1, 0.8, -1);
+    sc2Light.castShadow = false;
+    
+    const sc3Light = new THREE.DirectionalLight(0xFFFFFF, 0.5)
+    sc3Light.position.set(0, 0.7, 0);
+    sc3Light.castShadow = true;
+    sc3Light.shadow.mapSize.width = 512;
+    sc3Light.shadow.mapSize.height = 1024;
+    sc3Light.shadow.camera.near = 0.1;
+    sc3Light.shadow.camera.far = 2;
+    sc3Light.shadow.camera.left = -0.5;
+    sc3Light.shadow.camera.right = 0.5;
+    sc3Light.shadow.camera.top = 0.5;
+    sc3Light.shadow.camera.bottom = -0.5;
+    sc3Light.shadow.bias = -0.0001;
+    sc3Light.shadow.radius = 2;
+    sc3Light.shadow.blurSamples = 16;
+
+    scene.add(sc1Light);
+    scene.add(sc2Light);
+    scene.add(sc3Light);
+
+    // Change environment    
+    loader.load('env_01.glb', (gltf) => {
+        gltf.scene.traverse( function( child ) { 
+            if ( child.isMesh ) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                child.frustumCulled = false;
+            }
+        });  
+        
+        const mesh = gltf.scene;
+        scene.add(mesh);
+    });
+
+    scene.remove(groundPlane);
+
+    // Adjust record sleeve
+    //sleeve.position.set(0.438, 0, -0.227);
+    //sleeve.rotation.x = 1.294;
+    //sleeve.rotation.y = 0;
+
+    controls.maxPolarAngle = 1.4;
 }
 
 render();
