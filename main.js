@@ -306,14 +306,14 @@ controls.update();
 document.getElementById("loadTracksBtn").addEventListener('click', () => {
     getFile();
 });
-/*
+
 document.getElementById("changeSceneBtn").addEventListener('click', () => {
     if(!sceneChanged){
         loadEnv01();
         sceneChanged = true;
     }
 });
-*/
+
 
 document.addEventListener('mousemove', (event) => {
     if(isDragging){        
