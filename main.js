@@ -4,10 +4,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { InteractionManager } from 'three.interactive';
 import {Howl, Howler} from 'howler';
 import { parseBlob } from 'music-metadata';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 
 // Set up variables
 var meshLoaded = false;
 var audioLoaded = false;
+var postProcessEnabled = true;
 const clock = new THREE.Clock();
 var rpm = 0;
 var recordSpeed = 45;
@@ -115,7 +120,7 @@ var crackleEnd3 = new Howl({
 var endCrackle = null;
 
 // Set up Renderer
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const renderer = new THREE.WebGLRenderer({antialias:false});
 renderer.outputColorspace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x212121);
@@ -288,7 +293,7 @@ light3.position.set(2, 2, -2);
 light3.castShadow = false;
 scene.add(light3);
 
-const shadowCameraHelper = new THREE.CameraHelper( light.shadow.camera );
+//const shadowCameraHelper = new THREE.CameraHelper( light.shadow.camera );
 //scene.add( shadowCameraHelper );
 
 // Controls for the camera orbit
@@ -382,12 +387,27 @@ document.addEventListener('mousemove', (event) => {
     }
 });
 
+// Post Processing
+const renderScene = new RenderPass( scene, camera );
+const bokehPass = new BokehPass( scene, camera, {
+focus: 1,
+aperture: 0.0085,
+maxblur: 0.005
+});
+
+const outputPass = new OutputPass();
+const composer = new EffectComposer( renderer );
+composer.addPass( renderScene );
+composer.addPass( bokehPass );
+composer.addPass( outputPass );
+
 //Render loop
 function render(){    
 
     if(meshLoaded){
         const deltaTime = clock.getDelta();
-        
+        //scene.environmentRotation.y += 0.005;
+        //console.log(scene.environmentRotation.y);
         rpm = THREE.MathUtils.lerp(rpm, rpmTarget, 0.2);
         rpmMulti = rpm / recordSpeed;
         if(audioLoaded){
@@ -485,7 +505,12 @@ function render(){
     intMan.update();
     controls.update();
     requestAnimationFrame(render);    
-    renderer.render(scene, camera);
+    if(postProcessEnabled){
+        composer.render();
+    } else {
+        renderer.render(scene, camera);
+    }
+    
 }
 
 function norm(value, min, max) {
@@ -532,9 +557,16 @@ async function getFile() {
         // Add new sleeve
         const newSleeve = sleeve.clone(true);
         scene.add(newSleeve);
-        newSleeve.position.set(0.438, 0, -0.227 + (recordOffset * (albumCollection.length + 1)));
-        newSleeve.rotation.x = 1.294;
-        newSleeve.rotation.y = 0;
+        if(albumCollection.length == 0){
+            newSleeve.position.set(0, 0.148, -0.238);
+            newSleeve.rotation.x = 1.218;
+            newSleeve.rotation.y = 0;
+        } else {
+            newSleeve.position.set(0.438, 0, -0.227 + (recordOffset * (albumCollection.length + 1)));
+            newSleeve.rotation.x = 1.294;
+            newSleeve.rotation.y = 0;
+        }
+
         intMan.add(newSleeve);
         newSleeve.addEventListener('click', (event) =>{
             loadRecordToDeck(newRecord);
@@ -551,7 +583,7 @@ async function getFile() {
                         applyAlbumArtToRecord(albumArt, newSleeve, newRecord);
                     }
                     albumArtSet = true;
-                    record.visible = true;
+                    //record.visible = true;
                 }
                 if(metadata.common.albumartist){
                     newRecord.artist = metadata.common.albumartist;
@@ -664,15 +696,20 @@ function applyAlbumArtToRecord(picture, albumSleeve, recordClass) {
 function finalizeTrackQueue(tempTrackList, recordClass) {
     // Sort tracks by filename (natural order sorting for track numbers)
     tempTrackList.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true }));
-
+    var tempStartTimes = [];
+    var tempTrackQueue = [];
+    
     for (const trackObj of tempTrackList) {
         let { track, duration } = trackObj;
-
-        trackQueue.push(track);
-        trackStartTimes.push(totalDuration);  
+        //const recordTracks = [];
+        //const recordStartTimes = [];
+        tempTrackQueue.push(track);
+        //trackQueue.push(track);
+        tempStartTimes.push(totalDuration);  
+        //trackStartTimes.push(totalDuration);  
         totalDuration += duration;
-        recordClass.tracks = trackQueue;
-        recordClass.startTimes = trackStartTimes;
+        recordClass.tracks = tempTrackQueue;
+        recordClass.startTimes = tempStartTimes;
         recordClass.duration = totalDuration;
         //console.log(`Track: ${trackObj.fileName}, Duration: ${duration}`);
     }
@@ -692,9 +729,9 @@ function finalizeTrackQueue(tempTrackList, recordClass) {
     if(getEndCrackle > 0.66){
         endCrackle = crackleEnd3;
     }
-    audioLoaded = true;
     albumCollection.push(recordClass);
     //console.log(albumCollection);
+    //audioLoaded = true;
 }
 
 function changedSpeed(){
@@ -706,6 +743,7 @@ function loadRecordToDeck(recordObj) {
     trackStartTimes = recordObj.startTimes;
     totalDuration = recordObj.duration;
     currentTrackIndex = 0;
+    record.visible = true;
     audioLoaded = true;
 
     // Update label & sleeve visuals
@@ -728,23 +766,24 @@ function loadEnv01(){
     scene.remove(light3);
 
     // Adjust environment and tone mapping
-    renderer.toneMappingExposure = 1.2;
-    scene.environmentIntensity = 1;
+    renderer.toneMappingExposure = 1.5;
+    scene.environmentIntensity = 0.75;
+    scene.environmentRotation.y = 11.4;
 
     // Adjust lights
-    const sc1Light = new THREE.DirectionalLight(0xede2b4, 15)
+    const sc1Light = new THREE.DirectionalLight(0xede2b4, 11)
     sc1Light.position.set(5.6, 1.5, 6.3);
     sc1Light.castShadow = true;
     sc1Light.shadow.mapSize.width = 2048;
-    sc1Light.shadow.mapSize.height = 1024;
-    sc1Light.shadow.camera.near = 0.1;
+    sc1Light.shadow.mapSize.height = 2048;
+    sc1Light.shadow.camera.near = 4;
     sc1Light.shadow.camera.far = 10;
-    sc1Light.shadow.camera.left = -2;
-    sc1Light.shadow.camera.right = 2;
-    sc1Light.shadow.camera.top = 2;
-    sc1Light.shadow.camera.bottom = -2;
-    sc1Light.shadow.bias = -0.0001;
-    sc1Light.shadow.radius = 4;
+    sc1Light.shadow.camera.left = -1.2;
+    sc1Light.shadow.camera.right = 1.5;
+    sc1Light.shadow.camera.top = 1;
+    sc1Light.shadow.camera.bottom = -1;
+    sc1Light.shadow.bias = -0.002;
+    sc1Light.shadow.radius = 2;
     sc1Light.shadow.blurSamples = 32;
 
     const sc2Light = new THREE.DirectionalLight(0xb4c6d3, 0.05)
@@ -754,21 +793,25 @@ function loadEnv01(){
     const sc3Light = new THREE.DirectionalLight(0xFFFFFF, 0.5)
     sc3Light.position.set(0, 0.7, 0);
     sc3Light.castShadow = true;
-    sc3Light.shadow.mapSize.width = 512;
+    sc3Light.shadow.mapSize.width = 1024;
     sc3Light.shadow.mapSize.height = 1024;
-    sc3Light.shadow.camera.near = 0.1;
-    sc3Light.shadow.camera.far = 2;
+    sc3Light.shadow.camera.near = 0.5;
+    sc3Light.shadow.camera.far = 1.4;
     sc3Light.shadow.camera.left = -0.5;
-    sc3Light.shadow.camera.right = 0.5;
-    sc3Light.shadow.camera.top = 0.5;
-    sc3Light.shadow.camera.bottom = -0.5;
+    sc3Light.shadow.camera.right = 1;
+    sc3Light.shadow.camera.top = 0.3;
+    sc3Light.shadow.camera.bottom = -0.3;
     sc3Light.shadow.bias = -0.0001;
-    sc3Light.shadow.radius = 2;
+    sc3Light.shadow.radius = 3;
     sc3Light.shadow.blurSamples = 16;
+    sc3Light.shadow.intensity = 1.6;
 
     scene.add(sc1Light);
     scene.add(sc2Light);
     scene.add(sc3Light);
+
+    //const shadowCameraHelper = new THREE.CameraHelper( sc3Light.shadow.camera );
+    //scene.add( shadowCameraHelper );
 
     // Change environment    
     loader.load('env_01.glb', (gltf) => {
