@@ -3,18 +3,42 @@
 	<head>
 		<meta charset="utf-8">
 		<title>Turntable - Base Scene</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+		
 		<style>
 			body { margin: 0; }
 
-			#loadTracksBtn {
-				position: absolute;
-				bottom: 20px;
-				left: 20px;
+			h1 {
+				font-family: "Montserrat", sans-serif;
+				font-weight: 800; /* Bold for main titles */
+				font-size: 28px;
+				margin: 0 0 10px 0;
+			}
+
+			h2 {
+				font-family: "Montserrat", sans-serif;
+				font-weight: 400; /* Medium for subtitles */
+				font-size: 20px;
+				margin: 0 0 8px 0;
+			}
+
+			h3 {
+				font-family: "Montserrat", sans-serif;
+				font-weight: 400; /* Normal */
+				font-size: 16px;
+				margin: 0 0 6px 0;
+			}
+			
+			.ui-button {
 				padding: 12px 20px;
+				font-family: "Montserrat", sans-serif;
+				font-weight: 400;
 				font-size: 16px;
 				font-weight: bold;
-				background-color: #DAA520; /* Mustard Yellow */
-				color: #333333; /* Dark Grey Text */
+				background-color: #DAA520;
+				color: #333333;
 				border: none;
 				cursor: pointer;
 				border-radius: 8px;
@@ -22,35 +46,144 @@
 				transition: background-color 0.2s ease;
 			}
 
-			#loadTracksBtn:hover {
+			.ui-button:hover {
 				background-color: #ffee11; /* Slightly lighter mustard */
+			}
+			
+			#loadTracksBtn {
+				bottom: 20px;
+				left: 20px;
 			}
 
 			#changeSceneBtn {
-				position: absolute;
 				bottom: 20px;
 				right: 20px;
-				padding: 12px 20px;
-				font-size: 16px;
-				font-weight: bold;
-				background-color: #DAA520; /* Mustard Yellow */
-				color: #333333; /* Dark Grey Text */
-				border: none;
-				cursor: pointer;
-				border-radius: 8px;
-				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-				transition: background-color 0.2s ease;
 			}
 
-			#changeSceneBtn:hover {
-				background-color: #ffee11; /* Slightly lighter mustard */
+			#loadTracksBtn,
+			#changeSceneBtn {
+				position: absolute;
 			}
+
+			#recordInfoPanel {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				transform: translateX(120%); /* Start off-screen */
+				transition:
+					transform 0.5s ease;
+				width: 400px;
+				padding: 20px;
+				font-family: "Montserrat", sans-serif;
+				font-weight: 200;
+				color: white;
+				border-radius: 10px;
+				overflow: hidden;
+				z-index: 10;
+				backdrop-filter: blur(8px);
+				background-color: rgba(0, 0, 0, 0.4); /* darker base for contrast */
+				box-shadow: 0 0 5px rgba(0, 0, 0, 0.25);
+			}
+
+			#recordInfoPanel::before {
+				content: '';
+				position: absolute;
+				top: 0; left: 0; right: 0; bottom: 0;
+				z-index: -2;
+				background-size: cover;
+				background-position: center;
+				background-repeat: no-repeat;
+				filter: blur(10px);
+				opacity: 0.5;
+				transition: background-image 0.3s ease;
+				pointer-events: auto;
+				background-image: var(--bg-image);
+			}
+
+			#recordInfoPanel::after {
+				content: '';
+				position: absolute;
+				top: 0; left: 0; right: 0; bottom: 0;
+				z-index: -1;
+				background: rgba(0, 0, 0, 0.5);
+				pointer-events: auto;
+			}
+
+			#recordInfoPanel.visible {
+				transform: translateX(0);
+			}
+
+			#recordInfoPanel.hidden {
+				transform: translateX(500);
+			}
+
+			.hidden {
+                display: none;
+            }
+			
+			#recordInfoPanel h1,
+			#recordInfoPanel h2 {
+				margin: 0 0 10px 0;
+			}
+			
+			#loadToPlayerBtn {
+				bottom: 20px;
+				left: 20px;
+			}
+
+			#changeSceneBtn {
+				bottom: 20px;
+				right: 20px;
+			}
+
+			#buttonRow {
+				display: flex;
+				justify-content: space-between;
+				gap: 10px;
+				margin-top: 15px;
+			}
+
+			#trackList {
+				font-family: "Montserrat", sans-serif;
+				font-weight: 200;
+				font-size: 14px;
+				line-height: 1.6;
+				list-style: none;
+				padding-left: 0;
+				margin: 0;
+			}
+
+			#trackList li {
+				display: flex;
+				align-items: flex-start;
+				gap: 8px;
+			}
+
+			.track-number {
+				min-width: 20px;
+				text-align: right;
+				font-weight: 500;
+			}
+
+			.track-title {
+				flex: 1;
+			}
+
 		</style>
-		<script type="module" crossorigin src="./assets/index-DkRZRZJw.js"></script>
+		<script type="module" crossorigin src="./assets/index-D-UKKt3w.js"></script>
 	</head>
 	<body>
-		<button id="loadTracksBtn">Load Tracks</button>
-		<button id="changeSceneBtn">Change Scene</button>
-
+		<div id="recordInfoPanel" class="panel">
+			<h1 id="albumTitle">Album Title</h1>
+			<h2 id="artistName">Artist</h2>
+			<ul id="trackList"></ul>
+			<div id="buttonRow">
+				<button id="loadToPlayerBtn" class="ui-button">Load to Player</button>
+				<button id="closePanelBtn" class="ui-button">Close</button>
+			</div>
+		  </div>
+		
+		<button id="loadTracksBtn" class="ui-button">Load Tracks</button>
+		<button id="changeSceneBtn"  class="ui-button">Change Scene</button>
 	</body>
 </html>
