@@ -2,6 +2,7 @@
   "dependencies": {
     "howler": "^2.2.4",
     "music-metadata": "^11.0.2",
+    "sortablejs": "^1.15.6",
     "three": "^0.173.0",
     "three.interactive": "^1.8.0"
   },

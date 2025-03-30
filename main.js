@@ -8,6 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import Sortable from 'sortablejs';
 
 // Set up variables
 var meshLoaded = false;
@@ -33,6 +34,7 @@ var pitchBone = null;
 var pitchClone = null;
 var pitchTarget = new THREE.Quaternion(0, 0, 0, 0);
 const mouse = new THREE.Vector2();
+var recordLoading = false;
 var needleLifted = true;
 var recordEnded = false;
 var isDragging = false;
@@ -62,6 +64,23 @@ var dialPos1 = Math.PI / 4.8;  // 33 RPM (2 o'clock)
 var dialPos2 = 0;              // STOP (3 o'clock, default)
 var dialPos3 = -Math.PI / 4.8; // 45 RPM (3 o'clock)
 var dialPos4 = -Math.PI / 2;   // 78 RPM (4 o'clock)
+
+const sortable = new Sortable(document.getElementById('editableTrackList'), {
+    animation: 200,
+    handle: '.track-number',
+    ghostClass: 'sortable-ghost',
+    onEnd: () => {
+        updateTrackOrderFromDOM();
+    }
+});
+
+const recordBuilder = {
+	tracks: [],
+	trackNames: [],
+	duration: 0,
+	startTimes: [],
+	art: null
+};
 
 const trackPickerOpts = {
     types: [
@@ -327,8 +346,273 @@ controls.maxPolarAngle = 1.2;
 controls.target = new THREE.Vector3(0, 0.1, 0);
 controls.update();
 
-document.getElementById("loadTracksBtn").addEventListener('click', () => {
-    getFile();
+document.getElementById("buildRecordBtn").addEventListener("click", () => {
+    document.getElementById("recordBuildPanel").classList.remove("hidden");
+});
+
+document.getElementById("loadTracksToBuilderBtn").addEventListener("click", async () => {
+	const fileHandles = await window.showOpenFilePicker(trackPickerOpts);
+	const files = await Promise.all(fileHandles.map(handle => handle.getFile()));
+	const builderTrackList = document.getElementById("editableTrackList");
+	builderTrackList.innerHTML = ""; // Clear previous list
+	document.getElementById("noTracksMsg").style.display = "none";
+
+	recordBuilder.tracks = [];
+	recordBuilder.trackNames = [];
+	recordBuilder.startTimes = [];
+	recordBuilder.duration = 0;
+
+	let albumArtSet = false;
+    let tempDuration = 0;
+	const loadPromises = files.map(async (file) => {
+		const fileURL = URL.createObjectURL(file);
+		const metadata = await parseBlob(file);
+		const title = metadata.common.title || file.name;
+		const trackNumber = metadata.common.track?.no ?? null;
+
+        if (recordBuilder.trackNames.length === 0) {
+            if (metadata.common.album) {
+                document.getElementById("builderTitle").value = metadata.common.album;
+            }
+            if (metadata.common.artist || metadata.common.albumartist) {
+                document.getElementById("builderArtist").value = metadata.common.artist || metadata.common.albumartist;
+            }
+        }
+
+        if (!albumArtSet && metadata.common.picture?.length > 0) {
+            const image = metadata.common.picture[0];
+            const blobUrl = URL.createObjectURL(new Blob([image.data], { type: image.format }));
+    
+            document.getElementById("builderAlbumArt").src = blobUrl;
+            recordBuilder.art = image;
+            albumArtSet = true;
+        }
+
+		// Create howl inside promise scope
+		return new Promise((resolve) => {
+			const howl = new Howl({
+				src: [fileURL],
+				format: [file.type.split('/')[1]],
+				html5: true, // Ensures streaming behavior, especially for large files
+				onload: function () {
+					resolve({
+						fileName: file.name,
+						howl,
+						title,
+						trackNumber,
+						duration: howl.duration()
+					});
+				},
+                onend: function () {
+                    if (!needleLifted && rpm > 1 && !isSeeking && currentTrackIndex < trackQueue.length - 1) {
+                        playNextTrack();
+                    }
+                }
+			});
+		});
+	});
+
+	const loadedTracks = await Promise.all(loadPromises);
+
+	// Sort tracks by metadata track number (if present), then filename
+	loadedTracks.sort((a, b) => {
+		if (a.trackNumber && b.trackNumber) return a.trackNumber - b.trackNumber;
+		return a.fileName.localeCompare(b.fileName, undefined, { numeric: true });
+	});
+
+	// Populate builder UI and track state
+	loadedTracks.forEach((trackData, index) => {
+		const { howl, title, duration } = trackData;
+
+		recordBuilder.tracks.push(howl);
+		recordBuilder.trackNames.push(title);
+		recordBuilder.startTimes.push(tempDuration);
+		tempDuration += duration;
+
+		const li = document.createElement("li");
+		li.classList.add("builder-track-row");
+        li.dataset.index = index;
+		li.innerHTML = `
+			<span class="track-number">${index + 1}.</span>
+			<input type="text" class="track-edit" value="${title}">
+		`;
+		builderTrackList.appendChild(li);
+	});
+
+	recordBuilder.duration = tempDuration;
+});
+
+document.getElementById("fetchMetadataBtn").addEventListener("click", async () => {
+	if (!recordBuilder.tracks.length) return;
+
+	// Try to extract image data from the first track
+	const firstTrack = recordBuilder.tracks[0]._src; // Howler stores the source internally as `_src`
+
+	try {
+		const response = await fetch(firstTrack);
+		const blob = await response.blob();
+		const metadata = await parseBlob(blob);
+
+		if (metadata.common.picture && metadata.common.picture.length > 0) {
+			const image = metadata.common.picture[0];
+			const blobUrl = URL.createObjectURL(new Blob([image.data], { type: image.format }));
+
+			document.getElementById("builderAlbumArt").src = blobUrl;
+
+			// Save reference if needed later
+			recordBuilder.art = image;
+		} else {
+			alert("No image found in metadata.");
+		}
+	} catch (err) {
+		console.error("Error reading metadata:", err);
+		alert("Could not extract metadata from the track.");
+	}
+});
+
+document.getElementById("uploadArtBtn").addEventListener("click", async () => {
+	const [fileHandle] = await window.showOpenFilePicker({
+		types: [
+			{
+				description: 'Images',
+				accept: {
+					'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif']
+				}
+			}
+		],
+		excludeAcceptAllOption: true,
+		multiple: false
+	});
+
+	if (!fileHandle) return;
+
+	const file = await fileHandle.getFile();
+	const blobUrl = URL.createObjectURL(file);
+
+	const builderAlbumArt = document.getElementById("builderAlbumArt");
+	builderAlbumArt.src = blobUrl;
+
+	// Read as ArrayBuffer to simulate a picture-like object
+	const arrayBuffer = await file.arrayBuffer();
+	recordBuilder.art = {
+		data: new Uint8Array(arrayBuffer),
+		format: file.type
+	};
+});
+
+document.getElementById("addRecordBtn").addEventListener("click", () => {
+    if (recordBuilder.tracks.length === 0) return;
+
+    const newRecord = new NewRecord();
+    newRecord.id = Date.now();
+
+    const newSleeve = sleeve.clone(true);
+    scene.add(newSleeve);
+    intMan.add(newSleeve);
+
+    newRecord.mesh = newSleeve;
+    newRecord.artist = document.getElementById("builderArtist").value || "Unknown Artist";
+    newRecord.name = document.getElementById("builderTitle").value || "Untitled Record";
+    newRecord.tracks = recordBuilder.tracks;
+    newRecord.trackNames = recordBuilder.trackNames;
+    newRecord.startTimes = recordBuilder.startTimes;
+    newRecord.duration = recordBuilder.duration;
+    newRecord.art = recordBuilder.art;
+
+    applyAlbumArtToRecord(newRecord.art, newRecord.mesh, newRecord, false);
+
+    if (envNum == 0) {
+        newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
+    } else {
+        newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
+    }
+    newSleeve.rotation.x = 1.294;
+
+    newRecord.initialZ = newSleeve.position.z;
+    newRecord.targetPosition = newSleeve.position.clone();
+    newRecord.targetRotation = newSleeve.rotation.clone();
+
+    newSleeve.addEventListener("click", (event) => {
+        showRecordInfo(newRecord);
+        document.getElementById("recordInfoPanel").classList.add("visible");
+        event.stopPropagation();
+    });
+
+    newSleeve.addEventListener("mouseover", (event) => {
+        document.body.style.cursor = 'pointer';
+        nudgeSleeves(albumCollection.indexOf(newRecord));
+        event.stopPropagation();
+    });
+
+    newSleeve.addEventListener("mouseout", (event) => {
+        document.body.style.cursor = 'default';
+        revertSleeves();
+        event.stopPropagation();
+    });
+
+    recordDuration = newRecord.duration;
+    armSpeed = (armEnd - (armStart)) / recordDuration;
+    var getEndCrackle = Math.random();
+    if(getEndCrackle < 0.33){
+        endCrackle = crackleEnd1;
+    }
+    if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
+        endCrackle = crackleEnd2;
+    }
+    if(getEndCrackle > 0.66){
+        endCrackle = crackleEnd3;
+    }
+
+    albumCollection.push(newRecord);
+    document.getElementById("recordBuildPanel").classList.add("hidden");
+
+    setTimeout(function(){
+        // Reset recordBuilder object
+        recordBuilder.tracks = [];
+        recordBuilder.trackNames = [];
+        recordBuilder.duration = 0;
+        recordBuilder.startTimes = [];
+        recordBuilder.art = null;
+    
+        // Clear title/artist fields
+        document.getElementById("builderTitle").value = "";
+        document.getElementById("builderArtist").value = "";
+    
+        // Reset album art to default
+        document.getElementById("builderAlbumArt").src = "defaultArt.png";
+    
+        // Clear track list UI
+        const trackList = document.getElementById("editableTrackList");
+        trackList.innerHTML = "";
+        document.getElementById("noTracksMsg").style.display = "block";
+        }, 300);
+});
+
+document.getElementById("cancelBuildBtn").addEventListener("click", () => {
+    // Hide panel
+    document.getElementById("recordBuildPanel").classList.add("hidden");
+
+    setTimeout(function(){
+    // Reset recordBuilder object
+    recordBuilder.tracks = [];
+    recordBuilder.trackNames = [];
+    recordBuilder.duration = 0;
+    recordBuilder.startTimes = [];
+    recordBuilder.art = null;
+
+    // Clear title/artist fields
+    document.getElementById("builderTitle").value = "";
+    document.getElementById("builderArtist").value = "";
+
+    // Reset album art to default
+    document.getElementById("builderAlbumArt").src = "defaultArt.png";
+
+    // Clear track list UI
+    const trackList = document.getElementById("editableTrackList");
+    trackList.innerHTML = "";
+    document.getElementById("noTracksMsg").style.display = "block";
+    }, 300);
+
 });
 
 document.getElementById("changeSceneBtn").addEventListener('click', () => {
@@ -559,6 +843,10 @@ function onMouseUp(event) {
 }
 
 async function getFile() {
+    recordLoading = true;
+    const loadBtn = document.getElementById("loadTracksToBuilderBtn");
+    loadBtn.disabled = true;
+    loadBtn.textContent = "Loading..."
     //audioLoaded = false;
     const newRecord = new NewRecord();
     newRecord.id = Date.now();
@@ -779,16 +1067,27 @@ function finalizeTrackQueue(tempTrackList, recordClass) {
     }
     albumCollection.push(recordClass);
     recordClass.mesh.addEventListener('mouseover', (event) =>{
-        document.body.style.cursor = 'pointer'
-        nudgeSleeves(albumCollection.indexOf(recordClass));
+        if(!recordLoading){
+            document.body.style.cursor = 'pointer'
+            nudgeSleeves(albumCollection.indexOf(recordClass));
+        }
+
         event.stopPropagation();
     })
 
     recordClass.mesh.addEventListener('mouseout', (event) =>{
-        document.body.style.cursor = 'default'
-        revertSleeves();
+        if(!recordLoading){
+            document.body.style.cursor = 'default'
+            revertSleeves();
+        }
+        
         event.stopPropagation();
     })
+
+    recordLoading = false;
+    const loadBtn = document.getElementById("loadTracksToBuilderBtn");
+    loadBtn.disabled = false;
+    loadBtn.textContent = "Load tracks"
 }
 
 function changedSpeed(){
@@ -1011,5 +1310,35 @@ function showRecordInfo(recordObj) {
 function getRandomArbitrary(min, max) {
     return Math.random() * (max - min) + min;
   }
+
+function updateTrackOrderFromDOM() {
+    const listItems = document.querySelectorAll('#editableTrackList .builder-track-row');
+    const newTrackNames = [];
+    const newTracks = [];
+
+    listItems.forEach((item, index) => {
+        const input = item.querySelector('.track-edit');
+        const originalIndex = parseInt(item.dataset.index);
+
+        newTrackNames.push(input.value);
+        newTracks.push(recordBuilder.tracks[originalIndex]);
+
+        // Update display numbers
+        item.querySelector('.track-number').textContent = `${index + 1}.`;
+    });
+
+    // Rebuild arrays and durations
+    recordBuilder.trackNames = newTrackNames;
+    recordBuilder.tracks = newTracks;
+
+    // Recalculate start times
+    recordBuilder.startTimes = [];
+    let runningTotal = 0;
+    recordBuilder.tracks.forEach(track => {
+        recordBuilder.startTimes.push(runningTotal);
+        runningTotal += track.duration();
+    });
+    recordBuilder.duration = runningTotal;
+}
 
 render();
