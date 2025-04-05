@@ -12,6 +12,9 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 =======
 import Sortable from 'sortablejs';
 import Stats from 'stats.js'
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 // Set up variables
@@ -135,7 +138,11 @@ renderer.outputColorspace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x212121);
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 renderer.setPixelRatio(window.devicePixelRatio * 1.25);
+=======
+renderer.setPixelRatio(window.devicePixelRatio * 1.5);
+>>>>>>> Stashed changes
 =======
 renderer.setPixelRatio(window.devicePixelRatio * 1.5);
 >>>>>>> Stashed changes
@@ -824,6 +831,9 @@ function render(){
     }
 
     updateIntMan();
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     controls.update();
     requestAnimationFrame(render);    
@@ -1308,5 +1318,8 @@ function fpsLimiter(fps, callback){
 	};
 }
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 render();
