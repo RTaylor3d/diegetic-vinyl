@@ -8,6 +8,11 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+<<<<<<< Updated upstream
+=======
+import Sortable from 'sortablejs';
+import Stats from 'stats.js'
+>>>>>>> Stashed changes
 
 // Set up variables
 var meshLoaded = false;
@@ -24,6 +29,7 @@ var record = null;
 var recordLabel = null;
 var sleeve = null;
 var toneArm = null;
+var toneArmNeedle = null;
 var speedDial = null;
 var groundPlane = null;
 var yawBone = null;
@@ -119,12 +125,20 @@ var crackleEnd3 = new Howl({
 
 var endCrackle = null;
 
+const stats = new Stats()
+stats.showPanel(1);
+document.body.appendChild(stats.dom)
+
 // Set up Renderer
 const renderer = new THREE.WebGLRenderer({antialias:false});
 renderer.outputColorspace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x212121);
+<<<<<<< Updated upstream
 renderer.setPixelRatio(window.devicePixelRatio * 1.25);
+=======
+renderer.setPixelRatio(window.devicePixelRatio * 1.5);
+>>>>>>> Stashed changes
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -161,7 +175,10 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     recordLabel = mesh.getObjectByName("vinylLabel");
     speedDial = mesh.getObjectByName("dial");
     toneArm = mesh.getObjectByName("toneArm");
+    toneArmNeedle = mesh.getObjectByName("toneArmNeedle");
+    toneArmNeedle.position.set(0.001, 0.02, 0.245);
     yawBone = mesh.getObjectByName("boneYaw");
+    yawBone.add(toneArmNeedle);
     pitchBone = mesh.getObjectByName("bonePitch");
     pitchClone = pitchBone.clone();
     pitchTarget.copy(pitchBone.quaternion);
@@ -308,8 +325,278 @@ controls.maxPolarAngle = 1.2;
 controls.target = new THREE.Vector3(0, 0.1, 0);
 controls.update();
 
+<<<<<<< Updated upstream
 document.getElementById("loadTracksBtn").addEventListener('click', () => {
     getFile();
+=======
+document.getElementById("buildRecordBtn").addEventListener("click", () => {
+    document.getElementById("recordBuildPanel").classList.remove("hidden");
+});
+
+document.getElementById("loadTracksToBuilderBtn").addEventListener("click", async () => {
+	const fileHandles = await window.showOpenFilePicker(trackPickerOpts);
+	const files = await Promise.all(fileHandles.map(handle => handle.getFile()));
+	const builderTrackList = document.getElementById("editableTrackList");
+	builderTrackList.innerHTML = ""; // Clear previous list
+	document.getElementById("noTracksMsg").style.display = "none";
+
+	recordBuilder.tracks = [];
+	recordBuilder.trackNames = [];
+	recordBuilder.startTimes = [];
+	recordBuilder.duration = 0;
+
+	let albumArtSet = false;
+    let tempDuration = 0;
+	const loadPromises = files.map(async (file) => {
+		const fileURL = URL.createObjectURL(file);
+		const metadata = await parseBlob(file);
+		const title = metadata.common.title || file.name;
+		const trackNumber = metadata.common.track?.no ?? null;
+
+        if (recordBuilder.trackNames.length === 0) {
+            if (metadata.common.album) {
+                document.getElementById("builderTitle").value = metadata.common.album;
+            }
+            if (metadata.common.artist || metadata.common.albumartist) {
+                document.getElementById("builderArtist").value = metadata.common.artist || metadata.common.albumartist;
+            }
+        }
+
+        if (!albumArtSet && metadata.common.picture?.length > 0) {
+            const image = metadata.common.picture[0];
+            const blobUrl = URL.createObjectURL(new Blob([image.data], { type: image.format }));
+    
+            document.getElementById("builderAlbumArt").src = blobUrl;
+            recordBuilder.art = image;
+            albumArtSet = true;
+        }
+
+		// Create howl inside promise scope
+		return new Promise((resolve) => {
+			const howl = new Howl({
+				src: [fileURL],
+				format: [file.type.split('/')[1]],
+				html5: false, // Ensures streaming behavior, especially for large files
+				onload: function () {
+					resolve({
+						fileName: file.name,
+						howl,
+						title,
+						trackNumber,
+						duration: howl.duration()
+					});
+				},
+                onend: function () {
+                    if (!needleLifted && rpm > 1 && !isSeeking && currentTrackIndex < trackQueue.length - 1) {
+                        playNextTrack();
+                    }
+                }
+			});
+		});
+	});
+
+	const loadedTracks = await Promise.all(loadPromises);
+
+	// Sort tracks by metadata track number (if present), then filename
+	loadedTracks.sort((a, b) => {
+		if (a.trackNumber && b.trackNumber) return a.trackNumber - b.trackNumber;
+		return a.fileName.localeCompare(b.fileName, undefined, { numeric: true });
+	});
+
+	// Populate builder UI and track state
+	loadedTracks.forEach((trackData, index) => {
+		const { howl, title, duration } = trackData;
+
+		recordBuilder.tracks.push(howl);
+		recordBuilder.trackNames.push(title);
+		recordBuilder.startTimes.push(tempDuration);
+		tempDuration += duration;
+
+		const li = document.createElement("li");
+		li.classList.add("builder-track-row");
+        li.dataset.index = index;
+		li.innerHTML = `
+			<span class="track-number">${index + 1}.</span>
+			<input type="text" class="track-edit" value="${title}">
+		`;
+		builderTrackList.appendChild(li);
+	});
+
+	recordBuilder.duration = tempDuration;
+});
+
+document.getElementById("fetchMetadataBtn").addEventListener("click", async () => {
+	if (!recordBuilder.tracks.length) return;
+
+	// Try to extract image data from the first track
+	const firstTrack = recordBuilder.tracks[0]._src; // Howler stores the source internally as `_src`
+
+	try {
+		const response = await fetch(firstTrack);
+		const blob = await response.blob();
+		const metadata = await parseBlob(blob);
+
+		if (metadata.common.picture && metadata.common.picture.length > 0) {
+			const image = metadata.common.picture[0];
+			const blobUrl = URL.createObjectURL(new Blob([image.data], { type: image.format }));
+
+			document.getElementById("builderAlbumArt").src = blobUrl;
+
+			// Save reference if needed later
+			recordBuilder.art = image;
+		} else {
+			alert("No image found in metadata.");
+		}
+	} catch (err) {
+		console.error("Error reading metadata:", err);
+		alert("Could not extract metadata from the track.");
+	}
+});
+
+document.getElementById("uploadArtBtn").addEventListener("click", async () => {
+	const [fileHandle] = await window.showOpenFilePicker({
+		types: [
+			{
+				description: 'Images',
+				accept: {
+					'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif']
+				}
+			}
+		],
+		excludeAcceptAllOption: true,
+		multiple: false
+	});
+
+	if (!fileHandle) return;
+
+	const file = await fileHandle.getFile();
+	const blobUrl = URL.createObjectURL(file);
+
+	const builderAlbumArt = document.getElementById("builderAlbumArt");
+	builderAlbumArt.src = blobUrl;
+
+	// Read as ArrayBuffer to simulate a picture-like object
+	const arrayBuffer = await file.arrayBuffer();
+	recordBuilder.art = {
+		data: new Uint8Array(arrayBuffer),
+		format: file.type
+	};
+});
+
+document.getElementById("addRecordBtn").addEventListener("click", () => {
+    if (recordBuilder.tracks.length === 0) return;
+
+    const newRecord = new NewRecord();
+    newRecord.id = Date.now();
+
+    const newSleeve = sleeve.clone(true);
+    scene.add(newSleeve);
+    intMan.add(newSleeve);
+
+    newRecord.mesh = newSleeve;
+    newRecord.artist = document.getElementById("builderArtist").value || "Unknown Artist";
+    newRecord.name = document.getElementById("builderTitle").value || "Untitled Record";
+    newRecord.tracks = recordBuilder.tracks;
+    newRecord.trackNames = recordBuilder.trackNames;
+    newRecord.startTimes = recordBuilder.startTimes;
+    newRecord.duration = recordBuilder.duration;
+    newRecord.art = recordBuilder.art;
+
+    applyAlbumArtToRecord(newRecord.art, newRecord.mesh, newRecord, false);
+
+    if (envNum == 0) {
+        newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
+    } else {
+        newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
+    }
+    newSleeve.rotation.x = 1.294;
+
+    newRecord.initialZ = newSleeve.position.z;
+    newRecord.targetPosition = newSleeve.position.clone();
+    newRecord.targetRotation = newSleeve.rotation.clone();
+
+    newSleeve.addEventListener("click", (event) => {
+        showRecordInfo(newRecord);
+        document.getElementById("recordInfoPanel").classList.add("visible");
+        event.stopPropagation();
+    });
+
+    newSleeve.addEventListener("mouseover", (event) => {
+        document.body.style.cursor = 'pointer';
+        nudgeSleeves(albumCollection.indexOf(newRecord));
+        event.stopPropagation();
+    });
+
+    newSleeve.addEventListener("mouseout", (event) => {
+        document.body.style.cursor = 'default';
+        revertSleeves();
+        event.stopPropagation();
+    });
+
+    recordDuration = newRecord.duration;
+    armSpeed = (armEnd - (armStart)) / recordDuration;
+    var getEndCrackle = Math.random();
+    if(getEndCrackle < 0.33){
+        endCrackle = crackleEnd1;
+    }
+    if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
+        endCrackle = crackleEnd2;
+    }
+    if(getEndCrackle > 0.66){
+        endCrackle = crackleEnd3;
+    }
+
+    albumCollection.push(newRecord);
+    document.getElementById("recordBuildPanel").classList.add("hidden");
+
+    setTimeout(function(){
+        // Reset recordBuilder object
+        recordBuilder.tracks = [];
+        recordBuilder.trackNames = [];
+        recordBuilder.duration = 0;
+        recordBuilder.startTimes = [];
+        recordBuilder.art = null;
+    
+        // Clear title/artist fields
+        document.getElementById("builderTitle").value = "";
+        document.getElementById("builderArtist").value = "";
+    
+        // Reset album art to default
+        document.getElementById("builderAlbumArt").src = "defaultArt.png";
+    
+        // Clear track list UI
+        const trackList = document.getElementById("editableTrackList");
+        trackList.innerHTML = "";
+        document.getElementById("noTracksMsg").style.display = "block";
+        }, 300);
+});
+
+document.getElementById("cancelBuildBtn").addEventListener("click", () => {
+    // Hide panel
+    document.getElementById("recordBuildPanel").classList.add("hidden");
+
+    setTimeout(function(){
+    // Reset recordBuilder object
+    recordBuilder.tracks = [];
+    recordBuilder.trackNames = [];
+    recordBuilder.duration = 0;
+    recordBuilder.startTimes = [];
+    recordBuilder.art = null;
+
+    // Clear title/artist fields
+    document.getElementById("builderTitle").value = "";
+    document.getElementById("builderArtist").value = "";
+
+    // Reset album art to default
+    document.getElementById("builderAlbumArt").src = "defaultArt.png";
+
+    // Clear track list UI
+    const trackList = document.getElementById("editableTrackList");
+    trackList.innerHTML = "";
+    document.getElementById("noTracksMsg").style.display = "block";
+    }, 300);
+
+>>>>>>> Stashed changes
 });
 
 document.getElementById("changeSceneBtn").addEventListener('click', () => {
@@ -391,7 +678,7 @@ document.addEventListener('mousemove', (event) => {
 const renderScene = new RenderPass( scene, camera );
 const bokehPass = new BokehPass( scene, camera, {
 focus: 1,
-aperture: 0.0085,
+aperture: 0.01,
 maxblur: 0.005
 });
 
@@ -401,28 +688,82 @@ composer.addPass( renderScene );
 composer.addPass( bokehPass );
 composer.addPass( outputPass );
 
+const updateFocus = fpsLimiter(8, (now) => {
+    const worldFocusPos = new THREE.Vector3();
+    toneArmNeedle.getWorldPosition(worldFocusPos);
+    const cameraToFocus = camera.position.distanceTo(worldFocusPos);
+    bokehPass.materialBokeh.uniforms.focus.value = cameraToFocus;
+});
+
+const updateRpm = fpsLimiter(20, (now) => {
+    rpm = THREE.MathUtils.lerp(rpm, rpmTarget, 0.5);
+    rpmMulti = rpm / recordSpeed;
+    if(rpmMulti < 0.01){
+        rpmMulti = 0;
+    }
+    if(audioLoaded){
+        trackQueue[currentTrackIndex].rate(rpmMulti);
+        if(ambCrackle.playing()){
+            ambCrackle.rate(rpmMulti);
+        }
+        if(endCrackle.playing()){
+            endCrackle.rate(rpmMulti);
+        }
+    }  
+    angularVelocity = (rpm * 2 * Math.PI) / 60;
+    posInRecord = norm(yawBone.rotation.y, armStart, armEnd); 
+});
+
+const updateNonDeltaTone = fpsLimiter(20, (now) => {
+    if(pitchBone.rotation.x > -1.575){
+        needleLifted = false;
+        
+    } else {
+        needleLifted = true;
+        recordEnded = false;
+    }
+    if(trackQueue.length > 0 && yawBone.rotation.y < armStart + 0.02 && !needleLifted && rpm > 1 && !recordEnded && rpmMulti > 0.01){
+        if(!ambCrackle.playing()){
+            ambCrackle.seek(Math.random() * ambCrackle.duration());
+            ambCrackle.play();
+        }
+    } else {
+        ambCrackle.pause();
+    }
+
+    if(audioLoaded && yawBone.rotation.y < armEnd + 0.0005 && !needleLifted && !recordEnded && rpmMulti > 0.01){
+        if(!endCrackle.playing()){
+            recordEnded = true;
+            endCrackle.play();
+            ambCrackle.pause();
+        }
+    }
+    if(audioLoaded && needleLifted){
+        if(endCrackle.playing()){
+            endCrackle.pause();
+        }
+    }
+    if(yawBone.rotation.y < armEnd){
+        posInRecord = 1;
+    }
+    if(yawBone.rotation.y > armStart){
+        posInRecord = 0;
+    }
+});
+
+const updateIntMan = fpsLimiter(20, (now) => {
+    intMan.update();
+});
+
 //Render loop
 function render(){    
-
+    stats.begin();
     if(meshLoaded){
         const deltaTime = clock.getDelta();
-        //scene.environmentRotation.y += 0.005;
-        //console.log(scene.environmentRotation.y);
-        rpm = THREE.MathUtils.lerp(rpm, rpmTarget, 0.2);
-        rpmMulti = rpm / recordSpeed;
-        if(audioLoaded){
-            trackQueue[currentTrackIndex].rate(rpmMulti);
-            if(ambCrackle.playing()){
-                ambCrackle.rate(rpmMulti);
-            }
-            if(endCrackle.playing()){
-                endCrackle.rate(rpmMulti);
-            }
-
-        }        
-        angularVelocity = (rpm * 2 * Math.PI) / 60;
-
-        posInRecord = norm(yawBone.rotation.y, armStart, armEnd); 
+        if(postProcessEnabled){
+            updateFocus();
+        }
+        updateRpm();
         pitchBone.quaternion.slerp(pitchTarget, 0.1);        
         // Move the needle towards the start point if dropped close to the edge
         if(yawBone.rotation.y > armStart && yawBone.rotation.y < armStart + 0.02 && !needleLifted){
@@ -431,44 +772,13 @@ function render(){
         if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
             yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
 
-            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded){
+            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded && rpmMulti > 0.01){
                 trackQueue[currentTrackIndex].play()
             }
         }
-        if(pitchBone.rotation.x > -1.575){
-            needleLifted = false;
-            
-        } else {
-            needleLifted = true;
-            recordEnded = false;
-        }
-        if(trackQueue.length > 0 && yawBone.rotation.y < armStart + 0.02 && !needleLifted && rpm > 1 && !recordEnded){
-            if(!ambCrackle.playing()){
-                ambCrackle.seek(Math.random() * ambCrackle.duration());
-                ambCrackle.play();
-            }
-        } else {
-            ambCrackle.pause();
-        }
 
-        if(audioLoaded && yawBone.rotation.y < armEnd + 0.0005 && !needleLifted && !recordEnded){
-            if(!endCrackle.playing()){
-                recordEnded = true;
-                endCrackle.play();
-                ambCrackle.pause();
-            }
-        }
-        if(audioLoaded && needleLifted){
-            if(endCrackle.playing()){
-                endCrackle.pause();
-            }
-        }
-        if(yawBone.rotation.y < armEnd){
-            posInRecord = 1;
-        }
-        if(yawBone.rotation.y > armStart){
-            posInRecord = 0;
-        }
+        updateNonDeltaTone();
+
         if(isDragging && dragTarget == toneArm){
             yawBone.rotation.y = THREE.MathUtils.lerp(yawBone.rotation.y, yawTarget, 0.075);
         }
@@ -502,7 +812,19 @@ function render(){
         }
     }
 
+<<<<<<< Updated upstream
     intMan.update();
+=======
+    if(animateLibrary){
+        albumCollection.forEach((record) => {
+            record.mesh.rotation.x = THREE.MathUtils.lerp(record.mesh.rotation.x, record.targetRotation.x, 0.12);
+            record.mesh.position.y = THREE.MathUtils.lerp(record.mesh.position.y, record.targetPosition.y, 0.1225);
+            record.mesh.position.z = THREE.MathUtils.lerp(record.mesh.position.z, record.targetPosition.z, 0.125);
+        });
+    }
+
+    updateIntMan();
+>>>>>>> Stashed changes
     controls.update();
     requestAnimationFrame(render);    
     if(postProcessEnabled){
@@ -510,7 +832,7 @@ function render(){
     } else {
         renderer.render(scene, camera);
     }
-    
+    stats.end();
 }
 
 function norm(value, min, max) {
@@ -837,4 +1159,154 @@ function loadEnv01(){
     controls.maxPolarAngle = 1.4;
 }
 
+<<<<<<< Updated upstream
+=======
+function nudgeSleeves(currentSleeve){
+    animateLibrary = true;
+    console.log(currentSleeve);
+    albumCollection.forEach((record) => {
+        if(albumCollection.indexOf(record) > currentSleeve){
+            record.targetRotation.x = 1.6;
+        }
+        if(albumCollection.indexOf(record) == currentSleeve){
+            if(currentSleeve < albumCollection.length - 1){
+                if(envNum == 0){
+                    record.targetPosition.y = 0.125;
+                }
+                if(envNum == 1){
+                    record.targetPosition.y = -0.075;
+                }
+                if(currentSleeve > 0){
+                    console.log("Moving Forward");
+                    record.targetPosition.z = record.initialZ - 0.025;
+                } else {
+                    record.targetPosition.z = record.initialZ - 0.025;
+                    console.log("Moving Backward");
+                }
+
+            }
+
+            record.targetRotation.x = 1.45;
+            if(envNum == 0){
+                record.targetPosition.y = 0.125;
+            }
+            if(envNum == 1){
+                record.targetPosition.y = -0.075;
+            }
+            
+        }
+    });
+};
+
+function revertSleeves(){
+    albumCollection.forEach((record) => {
+        record.targetRotation.x = 1.294;
+        if(envNum == 0){
+            record.targetPosition.y = 0.0541;
+        }
+        if(envNum == 1){
+            record.targetPosition.y = -0.153;
+        }
+        record.targetPosition.z = record.initialZ;
+    });
+};
+
+function showRecordInfo(recordObj) {
+    const panel = document.getElementById('recordInfoPanel');
+    panel.classList.remove('hidden');
+    document.getElementById('albumTitle').innerText = recordObj.name || "Unknown Album";
+    document.getElementById('artistName').innerText = recordObj.artist || "Unknown Artist";
+    
+    const trackList = document.getElementById('trackList');
+    trackList.innerHTML = '';
+    recordObj.trackNames.forEach((name, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+		<span class="track-number">${index + 1}.</span>
+		<span class="track-title">${name || 'Untitled Track'}</span>
+	`;
+        trackList.appendChild(li);
+    });
+
+    if (recordObj.art && recordObj.art.image) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = recordObj.art.image.width;
+        canvas.height = recordObj.art.image.height;
+        ctx.drawImage(recordObj.art.image, 0, 0);
+        const dataURL = canvas.toDataURL();
+    
+        // Apply to the ::before pseudo-element using inline CSS variable or style
+        const panel = document.getElementById('recordInfoPanel');
+        panel.style.setProperty('--bg-image', `url('${dataURL}')`);
+    
+        // This line is optional if you want a solid color fallback layer too
+        panel.style.backgroundColor = 'rgba(255, 255, 255, 0.85)';
+    
+        // Inject image to pseudo-element
+        panel.style.setProperty('--bg-image', `url('${dataURL}')`);
+        panel.style.setProperty('--bg-opacity', '0.75');
+        
+    } else {
+        panel.style.backgroundImage = 'none';
+    }
+
+    document.getElementById('loadToPlayerBtn').onclick = () => {
+        loadRecordToDeck(recordObj);
+        //document.getElementById('recordInfoPanel').classList.add('hidden');
+    };
+
+    document.getElementById('closePanelBtn').onclick = () => {
+        document.getElementById('recordInfoPanel').classList.remove('visible');
+    };
+}
+
+function getRandomArbitrary(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+function updateTrackOrderFromDOM() {
+    const listItems = document.querySelectorAll('#editableTrackList .builder-track-row');
+    const newTrackNames = [];
+    const newTracks = [];
+
+    listItems.forEach((item, index) => {
+        const input = item.querySelector('.track-edit');
+        const originalIndex = parseInt(item.dataset.index);
+
+        newTrackNames.push(input.value);
+        newTracks.push(recordBuilder.tracks[originalIndex]);
+
+        // Update display numbers
+        item.querySelector('.track-number').textContent = `${index + 1}.`;
+    });
+
+    // Rebuild arrays and durations
+    recordBuilder.trackNames = newTrackNames;
+    recordBuilder.tracks = newTracks;
+
+    // Recalculate start times
+    recordBuilder.startTimes = [];
+    let runningTotal = 0;
+    recordBuilder.tracks.forEach(track => {
+        recordBuilder.startTimes.push(runningTotal);
+        runningTotal += track.duration();
+    });
+    recordBuilder.duration = runningTotal;
+}
+
+function fpsLimiter(fps, callback){
+    const interval = 1000 / fps;
+	let lastTime = 0;
+
+	return () => {
+		const now = performance.now();
+		if (now - lastTime >= interval) {
+			lastTime = now;
+			callback(now);
+		}
+	};
+}
+
+>>>>>>> Stashed changes
 render();
