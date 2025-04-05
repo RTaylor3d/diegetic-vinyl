@@ -3,18 +3,34 @@
 	<head>
 		<meta charset="utf-8">
 		<title>Turntable - Base Scene</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
 		<style>
 			body { margin: 0; }
 
-			#loadTracksBtn {
-				position: absolute;
-				bottom: 20px;
-				left: 20px;
+			h1 {
+				font-family: "Bodoni Moda", serif;
+				font-weight: 800; /* Bold for main titles */
+				font-size: 32px;
+				margin: 0px 0px 0px 0px;
+			}
+
+			h2 {
+				font-family: "Bodoni Moda", serif;
+				font-weight: 400; /* Medium for subtitles */
+				font-size: 24px;
+				margin: 0px 0px 0px 0px;
+			}
+			
+			.ui-button {
 				padding: 12px 20px;
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 700;
 				font-size: 16px;
-				font-weight: bold;
-				background-color: #DAA520; /* Mustard Yellow */
-				color: #333333; /* Dark Grey Text */
+				background-color: #F1C45A;
+				color: #333333;
 				border: none;
 				cursor: pointer;
 				border-radius: 8px;
@@ -22,34 +38,368 @@
 				transition: background-color 0.2s ease;
 			}
 
-			#loadTracksBtn:hover {
-				background-color: #ffee11; /* Slightly lighter mustard */
+			.ui-button:hover {
+				background-color: #FAEAC5;
+			}
+
+			.ui-button:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+				pointer-events: none;
+			}
+
+			.icon-button {
+				width: 48px;
+				height: 48px;
+				padding: 8px;
+				border-radius: 8px;
+				background-color: #F1C45A;
+				border: none;
+				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+				cursor: pointer;
+				transition: background-color 0.2s ease;
+			}
+
+			.icon-button:hover {
+				background-color: #FAEAC5;
+			}
+
+			.icon-button img {
+				width: 24px;
+				height: 24px;
+				object-fit: contain;
+			}
+			
+			#buildRecordBtn {
+				bottom: 20px;
+				left: 20px;
 			}
 
 			#changeSceneBtn {
-				position: absolute;
 				bottom: 20px;
 				right: 20px;
-				padding: 12px 20px;
-				font-size: 16px;
-				font-weight: bold;
-				background-color: #DAA520; /* Mustard Yellow */
-				color: #333333; /* Dark Grey Text */
-				border: none;
-				cursor: pointer;
-				border-radius: 8px;
-				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-				transition: background-color 0.2s ease;
 			}
 
-			#changeSceneBtn:hover {
-				background-color: #ffee11; /* Slightly lighter mustard */
+			#buildRecordBtn,
+			#changeSceneBtn {
+				position: absolute;
 			}
+
+			#recordBuildPanel {
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: 750px;
+				max-height: 80vh;
+				padding: 20px;
+				transition:
+					opacity 0.25s ease;
+				background-color: rgba(255, 255, 255, 0.85);
+				color: #222;
+				border-radius: 12px;
+				backdrop-filter: blur(6px);
+				box-shadow: 0 0 10px rgba(0,0,0,0.3);
+				display: flex;
+				flex-direction: column;
+				gap: 20px;
+				overflow-y: auto;
+				z-index: 100;
+			}
+
+			#recordBuildPanel.visible {
+				opacity: 1;
+			}
+
+			#recordBuildPanel.hidden {
+				opacity: 0;
+				pointer-events: none;
+			}
+
+			.record-build-header {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: space-between;
+				align-items: flex-start;
+				gap: 20px;
+			}
+
+			#builderTitle {
+				font-family: "Bodoni Moda", serif;
+				font-size: 32px;
+				font-weight: 800;
+				background: transparent;
+				border: none;
+			}
+
+			#builderArtist {
+				font-family: "Bodoni Moda", serif;
+				font-size: 24px;
+				font-weight: 400;
+				background: transparent;
+				border: none;
+			}
+
+			.record-build-info input {
+				font-family: "Outfit", sans-serif;
+				font-size: 18px;
+				font-weight: 400;
+				width: 100%;
+				padding: 8px;
+				margin-bottom: 0px;
+				border-radius: 6px;
+				border: none;
+				background: transparent;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+
+			.record-build-art {
+				width: 256px;
+				text-align: center;
+			}
+
+			#builderAlbumArt {
+				width: 100%;
+				height: auto;
+				border-radius: 6px;
+				border: 1px solid #ccc;
+				margin-bottom: 8px;
+			}
+
+			.album-art-buttons {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+			}
+
+			#editableTrackList {
+				list-style: none;
+				padding: 0;
+				margin-top: 10px;
+			}
+
+			#editableTrackList li {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+				margin-bottom: 8px;
+			}
+
+			#editableTrackList input {
+				flex: 1;
+				padding: 3px 10px;
+				border: none;
+				background: transparent;
+				border-radius: 6px;
+			}
+
+			#editableTrackList {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+
+			.builder-track-row {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+			}
+
+			.builder-track-row .track-number {
+				font-family: "Bodoni Moda", serif;
+				font-weight: 400;
+				min-width: 24px;
+				text-align: right;
+			}
+
+			.builder-track-row .track-edit {
+				flex: 1;
+				padding: 6px 10px;
+				font-family: "Outfit", sans-serif;
+				font-size: 14px;
+				border: 1px solid #ccc;
+				border-radius: 6px;
+			}
+
+			.record-build-footer {
+				display: flex;
+				justify-content: space-between;
+			}
+
+			#builderAlbumArt {
+				width: 100%;
+				height: auto;
+				border-radius: 6px;
+				border: 1px solid #888; /* Darker border for contrast */
+				background-color: #ffffff;
+				object-fit: cover;
+				display: block;
+				aspect-ratio: 1 / 1; /* Keeps it square */
+			}
+			
+			#recordInfoPanel {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				transform: translateX(120%); /* Start off-screen */
+				transition:
+					transform 0.5s ease;
+				width: 400px;
+				padding: 20px;
+				font-family: "Outfit", sans-serif;
+				font-weight: 200;
+				color: white;
+				border-radius: 10px;
+				overflow: hidden;
+				z-index: 10;
+				backdrop-filter: blur(8px);
+				background-color: rgba(0, 0, 0, 0.4); /* darker base for contrast */
+				box-shadow: 0 0 5px rgba(0, 0, 0, 0.25);
+			}
+
+			#recordInfoPanel::before {
+				content: '';
+				position: absolute;
+				top: 0; left: 0; right: 0; bottom: 0;
+				z-index: -2;
+				background-size: cover;
+				background-position: center;
+				background-repeat: no-repeat;
+				filter: blur(10px);
+				opacity: 0.5;
+				transition: background-image 0.3s ease;
+				pointer-events: auto;
+				background-image: var(--bg-image);
+			}
+
+			#recordInfoPanel::after {
+				content: '';
+				position: absolute;
+				top: 0; left: 0; right: 0; bottom: 0;
+				z-index: -1;
+				background: rgba(0, 0, 0, 0.5);
+				pointer-events: auto;
+			}
+
+			#recordInfoPanel.visible {
+				transform: translateX(0);
+			}
+
+			#recordInfoPanel.hidden {
+				transform: translateX(500);
+			}
+
+			.hidden {
+                display: none;
+            }
+			
+			#recordInfoPanel h1 {
+				margin: 0 0 0px 0;
+			}
+			
+			#recordInfoPanel h2 {
+				margin: 0 0 4px 0;
+			}
+			
+			#loadToPlayerBtn {
+				bottom: 20px;
+				left: 20px;
+			}
+
+			#changeSceneBtn {
+				bottom: 20px;
+				right: 20px;
+			}
+
+			#buttonRow {
+				display: flex;
+				justify-content: space-between;
+				gap: 10px;
+				margin-top: 15px;
+			}
+
+			#trackList {
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 150;
+				font-size: 16px;
+				line-height: 1.8;
+				list-style: none;
+				padding-left: 0;
+				margin: 0;
+			}
+
+			#trackList li {
+				display: flex;
+				align-items: flex-start;
+				gap: 8px;
+			}
+
+			.track-number {
+				font-family: "Bodoni Moda", serif;
+				font-weight: 400;
+				min-width: 20px;
+				text-align: right;
+				font-weight: 500;
+				cursor: grab;
+			}
+
+			.track-title {
+				flex: 1;
+			}
+
+			#trackEditorContainer {
+				margin-top: 0;
+			}
+
+			.sortable-ghost {
+				opacity: 0.5;
+				background: #cca3a3;
+			}
+
 		</style>
 	</head>
 	<body>
-		<button id="loadTracksBtn">Load Tracks</button>
-		<button id="changeSceneBtn">Change Scene</button>
+		<div id="recordBuildPanel" class="hidden">
+			<div class="record-build-header">
+			  <div class="record-build-info">
+				<input id="builderTitle" type="text" placeholder="Record Title" />
+				<input id="builderArtist" type="text" placeholder="Artist" />
+				<div id="trackEditorContainer">
+					<p id="noTracksMsg">Load tracks to begin</p>
+					<ul id="editableTrackList"></ul>
+					<button id="loadTracksToBuilderBtn" class="ui-button">Load Track(s)</button>
+				  </div>
+			  </div>
+			  <div class="record-build-art">
+				<img id="builderAlbumArt" src="defaultArt.png" alt="Album Art" />
+				<div class="album-art-buttons">
+				  <button id="fetchMetadataBtn" class="ui-button">Fetch from Metadata</button>
+				  <button id="uploadArtBtn" class="ui-button">Load Art...</button>
+				</div>
+			  </div>
+			</div>		  
+			<div class="record-build-footer">
+			  <button id="addRecordBtn" class="ui-button">Add to Library</button>
+			  <button id="cancelBuildBtn" class="ui-button">Cancel</button>
+			</div>
+		  </div>
+		<div id="recordInfoPanel" class="panel">
+			<h1 id="albumTitle">Album title</h1>
+			<h2 id="artistName">Artist</h2>
+			<ul id="trackList"></ul>
+			<div id="buttonRow">
+				<button id="loadToPlayerBtn" class="ui-button">Load to player</button>
+				<button id="closePanelBtn" class="ui-button">Close</button>
+			</div>
+		  </div>
+		
+		<button id="buildRecordBtn" class="ui-button icon-button">
+			<img src="newRecord.png" alt="Upload" />
+		</button>
+		<button id="changeSceneBtn"  class="ui-button">Change scene</button>
 		<script type="module" src="./main.js"></script>
 	</body>
 </html>
