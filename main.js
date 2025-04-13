@@ -9,10 +9,13 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import Sortable from 'sortablejs';
+import { gsap } from "gsap";
 
 // Set up variables
+var isTransitioning = false;
 var meshLoaded = false;
 var audioLoaded = false;
+var currentRecordLoaded = null;
 var postProcessEnabled = true;
 const clock = new THREE.Clock();
 var rpm = 0;
@@ -22,8 +25,10 @@ var rpmMulti = 0;
 var angularVelocity = (rpm * 2 * Math.PI) / 60;
 var platter = null;
 var record = null;
+var recordInitialY = 0;
 var recordLabel = null;
 var sleeve = null;
+var sleeveHit = null;
 var toneArm = null;
 var toneArmNeedle = null;
 var speedDial = null;
@@ -38,11 +43,16 @@ const mouse = new THREE.Vector2();
 var recordLoading = false;
 var needleLifted = true;
 var recordEnded = false;
+var recordLoaded = false;
 var isDragging = false;
+var mouseActive = false;
+var mouseActiveTimeout;
+var objectsMoving = false;
 var dragStarted = false;
 var isSeeking = false;
 var sceneChanged = false;
 var animateLibrary = false;
+var needleOverRecord = false;
 var seekTimeout = null;
 var dragTarget = null;
 var envNum = 0;
@@ -57,6 +67,8 @@ var totalDragDistance = 0;
 var dragThreshold = 30;
 var posInRecord = 0;
 var recordDuration = 0;
+var armInitialY = 0;
+var armInitialX = 0;
 var armSpeed = 0;
 var armStart = -0.540;
 var armEnd = -0.834;
@@ -125,7 +137,7 @@ class NewRecord {
 var ambCrackle = new Howl({
     src: ['./vinyl-crackle-33rpm-6065.mp3'],
     rate: 1, 
-    volume: 0.4,
+    volume: 0.5,
     loop: true
 });
 
@@ -161,7 +173,7 @@ renderer.setPixelRatio(window.devicePixelRatio * 2);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.2;
 document.body.appendChild(renderer.domElement);
 
 // Set up Scene
@@ -191,6 +203,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     const body = mesh.getObjectByName("body");
     platter = mesh.getObjectByName("platter");
     record = mesh.getObjectByName("vinyl");
+    recordInitialY = record.position.y;
     record.visible = false;
     recordLabel = mesh.getObjectByName("vinylLabel");
     speedDial = mesh.getObjectByName("dial");
@@ -199,7 +212,9 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     toneArmNeedle.position.set(0.001, 0.02, 0.245);
     yawBone = mesh.getObjectByName("boneYaw");
     yawBone.add(toneArmNeedle);
+    armInitialY = yawBone.rotation.y;
     pitchBone = mesh.getObjectByName("bonePitch");
+    armInitialX = pitchBone.rotation.x;
     pitchClone = pitchBone.clone();
     pitchTarget.copy(pitchBone.quaternion);
     intMan.add(body);
@@ -212,6 +227,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     })
 
     toneArm.addEventListener('mousedown', (event) => {
+        if (isTransitioning) return;
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         yawTarget = yawBone.rotation.y;
@@ -243,6 +259,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     });
 
     speedDial.addEventListener('mousedown', (event) => {
+        if (isTransitioning) return;
         isDragging = true;
         dragTarget = speedDial;
         controls.enableRotate = false;
@@ -276,10 +293,10 @@ loader.load('sleeve_01.glb', (gltf) => {
     });  
     
     const mesh = gltf.scene;
-    //scene.add(mesh);
     sleeve = mesh.getObjectByName("sleeve");
-    //sleeve.position.set(0.359, 0, -0.011);
-    //sleeve.rotation.y = 0.5;
+    sleeveHit = mesh.getObjectByName("sleeveHit");
+    sleeveHit.castShadow = false;
+    sleeveHit.receiveShadow = false;
 });
 
 loader.load('groundPlane_01.glb', (gltf) => {
@@ -352,10 +369,17 @@ controls.update();
 
 document.getElementById("buildRecordBtn").addEventListener("click", () => {
     document.getElementById("recordBuildPanel").classList.remove("hidden");
+    setBuilderButtonStates(false); // Disable initially
 });
 
 document.getElementById("loadTracksToBuilderBtn").addEventListener("click", async () => {
-	const fileHandles = await window.showOpenFilePicker(trackPickerOpts);
+    const loadBtn = document.getElementById("loadTracksToBuilderBtn");
+	loadBtn.disabled = true; // Disable immediately to prevent double-clicks
+    const fileHandles = await window.showOpenFilePicker(trackPickerOpts).catch(() => {
+		loadBtn.disabled = false; // User canceled dialog — re-enable
+		return [];
+	});
+	if (!fileHandles || fileHandles.length === 0) return;
 	const files = await Promise.all(fileHandles.map(handle => handle.getFile()));
 	const builderTrackList = document.getElementById("editableTrackList");
 	builderTrackList.innerHTML = ""; // Clear previous list
@@ -408,8 +432,13 @@ document.getElementById("loadTracksToBuilderBtn").addEventListener("click", asyn
 					});
 				},
                 onend: function () {
-                    if (!needleLifted && rpm > 1 && !isSeeking && currentTrackIndex < trackQueue.length - 1) {
-                        playNextTrack();
+                    if (!needleLifted && rpm > 1 && !isSeeking) {
+                        if (currentTrackIndex < trackQueue.length - 1) {
+                            playNextTrack();
+                        } else {
+                            // We're at the last track — mark it as ended
+                            recordEnded = true;
+                        }
                     }
                 }
 			});
@@ -444,6 +473,8 @@ document.getElementById("loadTracksToBuilderBtn").addEventListener("click", asyn
 	});
 
 	recordBuilder.duration = tempDuration;
+
+    setBuilderButtonStates(true); // Enable once tracks are loaded
 });
 
 document.getElementById("fetchMetadataBtn").addEventListener("click", async () => {
@@ -511,8 +542,10 @@ document.getElementById("addRecordBtn").addEventListener("click", () => {
     newRecord.id = Date.now();
 
     const newSleeve = sleeve.clone(true);
+    const newSleeveHit = sleeveHit.clone(true);
     scene.add(newSleeve);
-    intMan.add(newSleeve);
+    scene.add(newSleeveHit);
+    intMan.add(newSleeveHit);
 
     newRecord.mesh = newSleeve;
     newRecord.artist = document.getElementById("builderArtist").value || "Unknown Artist";
@@ -527,28 +560,31 @@ document.getElementById("addRecordBtn").addEventListener("click", () => {
 
     if (envNum == 0) {
         newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
+        newSleeveHit.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
     } else {
         newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
+        newSleeveHit.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
     }
     newSleeve.rotation.x = 1.294;
+    newSleeveHit.rotation.x = 1.294;
 
     newRecord.initialZ = newSleeve.position.z;
     newRecord.targetPosition = newSleeve.position.clone();
     newRecord.targetRotation = newSleeve.rotation.clone();
 
-    newSleeve.addEventListener("click", (event) => {
+    newSleeveHit.addEventListener("click", (event) => {
         showRecordInfo(newRecord);
         document.getElementById("recordInfoPanel").classList.add("visible");
         event.stopPropagation();
     });
 
-    newSleeve.addEventListener("mouseover", (event) => {
+    newSleeveHit.addEventListener("mouseover", (event) => {
         document.body.style.cursor = 'pointer';
         nudgeSleeves(albumCollection.indexOf(newRecord));
         event.stopPropagation();
     });
 
-    newSleeve.addEventListener("mouseout", (event) => {
+    newSleeveHit.addEventListener("mouseout", (event) => {
         document.body.style.cursor = 'default';
         revertSleeves();
         event.stopPropagation();
@@ -616,6 +652,8 @@ document.getElementById("cancelBuildBtn").addEventListener("click", () => {
     trackList.innerHTML = "";
     document.getElementById("noTracksMsg").style.display = "block";
     }, 300);
+
+    setBuilderButtonStates(false); // Re-disable buttons
 
 });
 
@@ -708,7 +746,15 @@ composer.addPass( renderScene );
 composer.addPass( bokehPass );
 composer.addPass( outputPass );
 
-const updateFocus = fpsLimiter(8, (now) => {
+const powerSaver = fpsLimiter(5, (now) => {
+    if(postProcessEnabled){
+        composer.render();
+    } else {
+        renderer.render(scene, camera);
+    }
+})
+
+const updateFocus = fpsLimiter(mouseActive ? 16: 1, (now) => {
     const worldFocusPos = new THREE.Vector3();
     toneArmNeedle.getWorldPosition(worldFocusPos);
     const cameraToFocus = camera.position.distanceTo(worldFocusPos);
@@ -716,7 +762,7 @@ const updateFocus = fpsLimiter(8, (now) => {
 });
 
 const updateRpm = fpsLimiter(20, (now) => {
-    rpm = THREE.MathUtils.lerp(rpm, rpmTarget, 0.4);
+    rpm = THREE.MathUtils.lerp(rpm, rpmTarget, 0.25);
     rpmMulti = rpm / recordSpeed;
     if(rpmMulti < 0.01){
         rpmMulti = 0;
@@ -734,8 +780,8 @@ const updateRpm = fpsLimiter(20, (now) => {
     posInRecord = norm(yawBone.rotation.y, armStart, armEnd); 
 });
 
-const updateNonDeltaTone = fpsLimiter(20, (now) => {
-    if(pitchBone.rotation.x > -1.575){
+const updateNonDeltaTone = fpsLimiter(mouseActive ? 20 : 5, (now) => {
+    if(pitchBone.rotation.x > -1.58){
         needleLifted = false;
         
     } else {
@@ -762,6 +808,10 @@ const updateNonDeltaTone = fpsLimiter(20, (now) => {
         if(endCrackle.playing()){
             endCrackle.pause();
         }
+
+        if (trackQueue[currentTrackIndex] && trackQueue[currentTrackIndex].playing()) {
+            trackQueue[currentTrackIndex].stop();
+        }
     }
     if(yawBone.rotation.y < armEnd){
         posInRecord = 1;
@@ -782,23 +832,32 @@ function render(){
         const deltaTime = clock.getDelta();
         updateFocus();
         updateRpm();
-      
-
-        pitchBone.quaternion.slerp(pitchTarget, 0.1);        
+           
         // Move the needle towards the start point if dropped close to the edge
-        if(yawBone.rotation.y > armStart && yawBone.rotation.y < armStart + 0.02 && !needleLifted){
-            yawBone.rotation.y += ((armSpeed * 25) * deltaTime) * rpmMulti;  
-        }
-        if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
-            yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
-
-            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded && rpmMulti > 0.01){
-                trackQueue[currentTrackIndex].play()
+        if(!isTransitioning){
+            pitchBone.quaternion.slerp(pitchTarget, 0.1);     
+            if(yawBone.rotation.y > armStart + 0.1){
+                needleOverRecord = false;
+            } else {
+                needleOverRecord = true;
             }
+            if(yawBone.rotation.y > armStart && yawBone.rotation.y < armStart + 0.02 && !needleLifted){
+                yawBone.rotation.y += ((armSpeed * 25) * deltaTime) * rpmMulti;  
+            }
+            if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
+                yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
+    
+                if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded && rpmMulti > 0.01){
+                    trackQueue[currentTrackIndex].play()
+                }
+            }
+        } else {
+            //yawBone.rotation.y = THREE.MathUtils.lerp(yawBone.rotation.y, yawTarget, 0.075);
+            speedDial.rotation.y = THREE.MathUtils.lerp(speedDial.rotation.y, dialTarget, 0.35);
         }
 
         updateNonDeltaTone();
-
+        
         if(isDragging && dragTarget == toneArm){
             yawBone.rotation.y = THREE.MathUtils.lerp(yawBone.rotation.y, yawTarget, 0.075);
         }
@@ -843,17 +902,32 @@ function render(){
     updateIntMan();
     controls.update();
     requestAnimationFrame(render);    
-    if(postProcessEnabled){
-        composer.render();
+    if(mouseActive || rpm > 0.1){
+        if(postProcessEnabled){
+            composer.render();
+        } else {
+            renderer.render(scene, camera);
+        }
     } else {
-        renderer.render(scene, camera);
-    }
-    
+        powerSaver();
+    }    
 }
 
 function norm(value, min, max) {
     return (value - min) / (max - min);
 }
+
+document.addEventListener("mousedown", () => {
+    mouseActive = true;
+    clearTimeout(mouseActiveTimeout);
+});
+
+document.addEventListener("mouseup", () => {
+    mouseActiveTimeout = setTimeout(() => {
+        mouseActive = false;
+    }, 2500);
+
+});
 
 function onMouseUp(event) {
     controls.enableRotate = true;
@@ -863,117 +937,14 @@ function onMouseUp(event) {
     isDragging = false;
     dragTarget = null;
 
+    if (trackQueue[currentTrackIndex] && trackQueue[currentTrackIndex].playing()) {
+        trackQueue[currentTrackIndex].stop();
+    }
+
     // Reset back to the original rotation smoothly
     pitchTarget.copy(pitchClone.quaternion);
     // Remove the global mouseup listener to prevent unnecessary calls
     document.removeEventListener('mouseup', onMouseUp);
-}
-
-async function getFile() {
-    recordLoading = true;
-    const loadBtn = document.getElementById("loadTracksToBuilderBtn");
-    loadBtn.disabled = true;
-    loadBtn.textContent = "Loading..."
-    //audioLoaded = false;
-    const newRecord = new NewRecord();
-    newRecord.id = Date.now();
-    
-    try {
-        const fileHandles = await window.showOpenFilePicker(trackPickerOpts);
-        const files = await Promise.all(fileHandles.map(handle => handle.getFile()));
-
-        // Stop and unload any playing track
-        //if (trackQueue.length > 0 && trackQueue[currentTrackIndex]) {
-        //    trackQueue[currentTrackIndex].unload();
-        //}
-
-        // Reset track queue and duration tracking
-        //trackQueue = [];
-        //trackStartTimes = [];
-        totalDuration = 0;
-        //currentTrackIndex = 0;
-
-        let tempTrackList = [];
-        let albumArtSet = false;
-
-        // Add new sleeve
-        const newSleeve = sleeve.clone(true);
-        scene.add(newSleeve);
-        intMan.add(newSleeve);
-        newRecord.mesh = newSleeve;
-        if(envNum == 0){
-            newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
-            newSleeve.rotation.x = 1.294;
-        }
-
-        if(envNum == 1){
-            newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
-            newSleeve.rotation.x = 1.294;
-        }
-
-        newRecord.initialZ = newSleeve.position.z;
-        newRecord.targetPosition = newSleeve.position.clone();
-        newRecord.targetRotation = newSleeve.rotation.clone();
-
-        newSleeve.addEventListener('click', (event) =>{
-            showRecordInfo(newRecord);
-            document.getElementById('recordInfoPanel').classList.add('visible');
-            event.stopPropagation();
-        })
-        
-        for (const file of files) {
-            const fileURL = URL.createObjectURL(file);            
-            const metadata = await parseBlob(file);
-            let trackName
-
-            if(metadata.common.title){
-                trackName = metadata.common.title;
-            }
-
-            if (!albumArtSet) {
-                if (metadata.common.picture && metadata.common.picture.length > 0) {
-                    const albumArt = metadata.common.picture[0];
-                    if(albumArt != null){
-                        applyAlbumArtToRecord(albumArt, newSleeve, newRecord, false);
-                    }
-                    albumArtSet = true;
-                    //record.visible = true;
-                }
-                if(metadata.common.albumartist){
-                    newRecord.artist = metadata.common.albumartist;
-                }
-                
-                if(metadata.common.album){
-                    newRecord.name = metadata.common.album;
-                }
-            }
-
-            let newTrack = new Howl({
-                src: [fileURL],
-                format: [file.type.split('/')[1]],
-                onload: function () {  
-                    let duration = newTrack.duration();
-                    tempTrackList.push({ 
-                        fileName: file.name, 
-                        track: newTrack, 
-                        trackNames: trackName,
-                        duration: duration 
-                    });
-
-                    if (tempTrackList.length === files.length) {
-                        finalizeTrackQueue(tempTrackList, newRecord);
-                    }
-                },
-                onend: function () {
-                    if (!needleLifted && rpm > 1 && !isSeeking && currentTrackIndex < trackQueue.length - 1) {
-                        playNextTrack();
-                    }
-                }
-            });
-        }
-    } catch (error) {
-        console.error("Error loading files:", error);
-    }
 }
 
 function playNextTrack() {
@@ -1005,7 +976,7 @@ function seekToPosition() {
         //console.log(`Seeking in Track ${trackIndex + 1} at ${trackTime.toFixed(2)} sec`);
 
         // Stop the old track and play the new one
-        if (trackQueue[currentTrackIndex]) {
+        if (trackQueue[currentTrackIndex] && trackQueue[currentTrackIndex].playing()) {
             trackQueue[currentTrackIndex].stop();
         }
 
@@ -1027,6 +998,8 @@ function applyAlbumArtToRecord(picture, albumSleeve, recordClass, changingRecord
             roughness: 0.16, 
             metalness: 0.0
         });
+
+        recordLabel.material.needsUpdate = true;
 
         return;
     }
@@ -1122,6 +1095,7 @@ function changedSpeed(){
 }
 
 function loadRecordToDeck(recordObj) {
+    currentRecordLoaded = recordObj;
     audioLoaded = false;
     trackQueue = recordObj.tracks;
     trackStartTimes = recordObj.startTimes;
@@ -1141,7 +1115,120 @@ function loadRecordToDeck(recordObj) {
     }
 
     record.visible = true;
+    if(!recordLoaded){
+        record.position.y = 1;    
+        gsap.to(record.position,{
+            y: recordInitialY,
+            duration: 1,
+            ease: "power3.out"
+        });
+        recordLoaded = true;
+    }
+
     console.log("loaded record ", recordObj);
+}
+
+async function loadRecordToDeckAnim(recordObj) {
+    currentRecordLoaded = recordObj;
+
+	// 1: Stop playback
+	rpmTarget = 0;
+    yawTarget = yawBone.rotation.y;
+    setTimeout(() => {
+        dialTarget = dialPos2;
+        isTransitioning = true;
+    }, 200);
+    setTimeout(() => {
+        if (trackQueue[currentTrackIndex] && trackQueue[currentTrackIndex].playing()) {
+            trackQueue[currentTrackIndex].stop();
+        }
+    }, 250);
+
+	// 2: Animate tonearm up and home
+	await animateTonearmHome();
+
+	// 3: Lift and spin current record
+	await animateRecordLiftAndSpin(recordObj);
+
+	// 4: Load new record (art, playlist, etc.)
+	loadRecordToDeck(recordObj); // Doesn't auto-play
+
+	isTransitioning = false;
+}
+
+function animateTonearmHome() {
+	return new Promise((resolve) => {
+        if(needleOverRecord){
+            setTimeout(() => {
+                resolve();
+            }, 750);
+        } else {
+            setTimeout(() => {
+                resolve();
+            }, 50);
+        }        
+        
+        const toneArmTl = gsap.timeline({});        
+        if(needleOverRecord){
+            toneArmTl.to(pitchBone.rotation, {
+                x: armInitialX - 0.075,
+                duration: 0.5,
+                ease: "power2.inOut"
+            });
+            
+            toneArmTl.to(yawBone.rotation, {
+                y: armInitialY,
+                duration: 1,
+                ease: "power2.inOut"
+            }, 0.2);
+    
+            toneArmTl.to(pitchBone.rotation, {
+                x: armInitialX,
+                duration: 0.5,
+                ease: "power2.inOut"
+            }, 0.75);
+
+        } else {
+            toneArmTl.to(yawBone.rotation, {
+                y: armInitialY,
+                duration: 1,
+                ease: "power2.inOut"
+            });
+        }
+
+	});
+}
+
+function animateRecordLiftAndSpin(recordObj) {
+	return new Promise((resolve) => {
+		record.artUpdated = false;
+        const changeRecord = gsap.timeline({onComplete: resolve});        
+        record.rotation.x = 0;
+        changeRecord.to(record.position, {
+            y: recordInitialY + 0.16,
+            duration: 1,
+            ease: "power2.out"
+        }, 0);
+
+        changeRecord.to(record.rotation, {
+            x: Math.PI * 2,
+            duration: 1.25,
+            ease: "power2.inOut",
+            onUpdate: () => {
+                // Check if we've passed halfway to swap art
+                if (record.rotation.x >= Math.PI && !record.artUpdated) {
+                    applyAlbumArtToRecord(recordObj.art, sleeve, recordObj, true);
+                    record.artUpdated = true;
+                }
+            }
+        }, 0);
+
+        changeRecord.to(record.position, {
+            y: recordInitialY,
+            duration: 0.75,
+            ease: "power2.inOut"
+        }, 1);
+	});
 }
 
 function loadEnv01(){
@@ -1236,7 +1323,6 @@ function loadEnv01(){
 
 function nudgeSleeves(currentSleeve){
     animateLibrary = true;
-    console.log(currentSleeve);
     albumCollection.forEach((record) => {
         if(albumCollection.indexOf(record) > currentSleeve){
             record.targetRotation.x = 1.6;
@@ -1250,11 +1336,9 @@ function nudgeSleeves(currentSleeve){
                     record.targetPosition.y = -0.075;
                 }
                 if(currentSleeve > 0){
-                    console.log("Moving Forward");
                     record.targetPosition.z = record.initialZ - 0.025;
                 } else {
                     record.targetPosition.z = record.initialZ - 0.025;
-                    console.log("Moving Backward");
                 }
 
             }
@@ -1283,6 +1367,17 @@ function revertSleeves(){
         record.targetPosition.z = record.initialZ;
     });
 };
+
+function setBuilderButtonStates(enabled) {
+	// Always leave these enabled
+	document.getElementById("loadTracksToBuilderBtn").disabled = false;
+	document.getElementById("cancelBuildBtn").disabled = false;
+
+	// Toggle the rest based on whether tracks are loaded
+	document.getElementById("addRecordBtn").disabled = !enabled;
+	document.getElementById("fetchMetadataBtn").disabled = !enabled;
+	document.getElementById("uploadArtBtn").disabled = !enabled;
+}
 
 function showRecordInfo(recordObj) {
     const panel = document.getElementById('recordInfoPanel');
@@ -1324,9 +1419,20 @@ function showRecordInfo(recordObj) {
         panel.style.backgroundImage = 'none';
     }
 
-    document.getElementById('loadToPlayerBtn').onclick = () => {
-        loadRecordToDeck(recordObj);
-        //document.getElementById('recordInfoPanel').classList.add('hidden');
+    const loadBtn = document.getElementById('loadToPlayerBtn');
+
+    // Compare by ID (or fallback by name+artist if needed)
+    const isAlreadyLoaded = currentRecordLoaded && recordObj.id === currentRecordLoaded.id;
+    loadBtn.disabled = isAlreadyLoaded;
+
+    loadBtn.onclick = () => {       
+        if (isAlreadyLoaded) return;
+        loadBtn.disabled = true; // Prevent repeated clicks
+        if (!recordLoaded) {
+            loadRecordToDeck(recordObj);
+        } else {
+            loadRecordToDeckAnim(recordObj);
+        }
     };
 
     document.getElementById('closePanelBtn').onclick = () => {
