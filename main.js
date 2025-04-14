@@ -754,7 +754,8 @@ const powerSaver = fpsLimiter(5, (now) => {
     }
 })
 
-const updateFocus = fpsLimiter(mouseActive ? 16: 1, (now) => {
+const updateFocus = fpsLimiter(12, (now) => {
+    if(!mouseActive) return;
     const worldFocusPos = new THREE.Vector3();
     toneArmNeedle.getWorldPosition(worldFocusPos);
     const cameraToFocus = camera.position.distanceTo(worldFocusPos);
@@ -780,7 +781,8 @@ const updateRpm = fpsLimiter(20, (now) => {
     posInRecord = norm(yawBone.rotation.y, armStart, armEnd); 
 });
 
-const updateNonDeltaTone = fpsLimiter(mouseActive ? 20 : 5, (now) => {
+const updateNonDeltaTone = fpsLimiter(15, (now) => {
+    if(rpm < 0.1) return;
     if(pitchBone.rotation.x > -1.58){
         needleLifted = false;
         
@@ -916,6 +918,14 @@ function render(){
 function norm(value, min, max) {
     return (value - min) / (max - min);
 }
+
+document.addEventListener("wheel", () => {
+    mouseActive = true;
+    clearTimeout(mouseActiveTimeout);
+    mouseActiveTimeout = setTimeout(() => {
+        mouseActive = false;
+    }, 2500);
+})
 
 document.addEventListener("mousedown", () => {
     mouseActive = true;
