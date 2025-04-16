@@ -18,6 +18,7 @@ var audioLoaded = false;
 var currentRecordLoaded = null;
 var postProcessEnabled = true;
 const clock = new THREE.Clock();
+const textureLoader = new THREE.TextureLoader();
 var rpm = 0;
 var recordSpeed = 45;
 var rpmTarget = 0;
@@ -364,6 +365,8 @@ controls.enableRotate = true;
 controls.maxDistance = 1.1;
 controls.minDistance = 0.3;
 controls.maxPolarAngle = 1.2;
+controls.minAzimuthAngle = -Math.PI / 4;
+controls.maxAzimuthAngle = Math.PI / 4;
 controls.target = new THREE.Vector3(0, 0.1, 0);
 controls.update();
 
@@ -831,7 +834,11 @@ const updateIntMan = fpsLimiter(20, (now) => {
 function render(){    
 
     if(meshLoaded){
-        const deltaTime = clock.getDelta();
+        let deltaTime = clock.getDelta();
+        const maxDeltaTime = 1 / 30;
+        if (deltaTime > maxDeltaTime) {
+            deltaTime = maxDeltaTime;
+        }
         updateFocus();
         updateRpm();
            
@@ -1020,7 +1027,6 @@ function applyAlbumArtToRecord(picture, albumSleeve, recordClass, changingRecord
     const imageUrl = URL.createObjectURL(blob);
 
     // Load texture and apply to record material
-    const textureLoader = new THREE.TextureLoader();
     textureLoader.load(imageUrl, (texture) => {
 
         albumSleeve.material = new THREE.MeshStandardMaterial({
