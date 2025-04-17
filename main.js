@@ -26,6 +26,7 @@ var rpmMulti = 0;
 var angularVelocity = (rpm * 2 * Math.PI) / 60;
 var platter = null;
 var record = null;
+var editingRecord = null;
 var recordInitialY = 0;
 var recordLabel = null;
 var sleeve = null;
@@ -85,6 +86,7 @@ const sortable = new Sortable(document.getElementById('editableTrackList'), {
     ghostClass: 'sortable-ghost',
     onEnd: () => {
         updateTrackOrderFromDOM();
+        renderTrackListUI();
     }
 });
 
@@ -388,13 +390,17 @@ document.getElementById("loadTracksToBuilderBtn").addEventListener("click", asyn
 	builderTrackList.innerHTML = ""; // Clear previous list
 	document.getElementById("noTracksMsg").style.display = "none";
 
+    /*
 	recordBuilder.tracks = [];
 	recordBuilder.trackNames = [];
 	recordBuilder.startTimes = [];
 	recordBuilder.duration = 0;
+    */
+
+    let tempDuration = recordBuilder.duration || 0;
 
 	let albumArtSet = false;
-    let tempDuration = 0;
+    //let tempDuration = 0;
 	const loadPromises = files.map(async (file) => {
 		const fileURL = URL.createObjectURL(file);
 		const metadata = await parseBlob(file);
@@ -476,6 +482,8 @@ document.getElementById("loadTracksToBuilderBtn").addEventListener("click", asyn
 	});
 
 	recordBuilder.duration = tempDuration;
+    recalculateStartTimes();
+    renderTrackListUI();
 
     setBuilderButtonStates(true); // Enable once tracks are loaded
 });
@@ -541,94 +549,116 @@ document.getElementById("uploadArtBtn").addEventListener("click", async () => {
 document.getElementById("addRecordBtn").addEventListener("click", () => {
     if (recordBuilder.tracks.length === 0) return;
 
-    const newRecord = new NewRecord();
-    newRecord.id = Date.now();
+    if (editingRecord) {
+        // Update existing record
+        editingRecord.name = document.getElementById("builderTitle").value;
+        editingRecord.artist = document.getElementById("builderArtist").value;
+        editingRecord.tracks = [...recordBuilder.tracks];
+        editingRecord.trackNames = [...recordBuilder.trackNames];
+        editingRecord.startTimes = [...recordBuilder.startTimes];
+        editingRecord.duration = recordBuilder.duration;
+        editingRecord.art = recordBuilder.art;
 
-    const newSleeve = sleeve.clone(true);
-    const newSleeveHit = sleeveHit.clone(true);
-    scene.add(newSleeve);
-    scene.add(newSleeveHit);
-    intMan.add(newSleeveHit);
+        applyAlbumArtToRecord(recordBuilder.art, editingRecord.mesh, editingRecord, false);
 
-    newRecord.mesh = newSleeve;
-    newRecord.artist = document.getElementById("builderArtist").value || "Unknown Artist";
-    newRecord.name = document.getElementById("builderTitle").value || "Untitled Record";
-    newRecord.tracks = recordBuilder.tracks;
-    newRecord.trackNames = recordBuilder.trackNames;
-    newRecord.startTimes = recordBuilder.startTimes;
-    newRecord.duration = recordBuilder.duration;
-    newRecord.art = recordBuilder.art;
+        editingRecord = null;
+        document.getElementById("addRecordBtn").textContent = "Add to Library";
 
-    applyAlbumArtToRecord(newRecord.art, newRecord.mesh, newRecord, false);
-
-    if (envNum == 0) {
-        newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
-        newSleeveHit.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
     } else {
-        newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
-        newSleeveHit.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
+
+        const newRecord = new NewRecord();
+        newRecord.id = Date.now();
+    
+        const newSleeve = sleeve.clone(true);
+        const newSleeveHit = sleeveHit.clone(true);
+        scene.add(newSleeve);
+        scene.add(newSleeveHit);
+        intMan.add(newSleeveHit);
+    
+        newRecord.mesh = newSleeve;
+        newRecord.artist = document.getElementById("builderArtist").value || "Unknown Artist";
+        newRecord.name = document.getElementById("builderTitle").value || "Untitled Record";
+        newRecord.tracks = recordBuilder.tracks;
+        newRecord.trackNames = recordBuilder.trackNames;
+        newRecord.startTimes = recordBuilder.startTimes;
+        newRecord.duration = recordBuilder.duration;
+        newRecord.art = recordBuilder.art;
+    
+        applyAlbumArtToRecord(newRecord.art, newRecord.mesh, newRecord, false);
+    
+        if (envNum == 0) {
+            newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
+            newSleeveHit.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
+        } else {
+            newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
+            newSleeveHit.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
+        }
+        newSleeve.rotation.x = 1.294;
+        newSleeveHit.rotation.x = 1.294;
+    
+        newRecord.initialZ = newSleeve.position.z;
+        newRecord.targetPosition = newSleeve.position.clone();
+        newRecord.targetRotation = newSleeve.rotation.clone();
+    
+        newSleeveHit.addEventListener("click", (event) => {
+            showRecordInfo(newRecord);
+            document.getElementById("recordInfoPanel").classList.add("visible");
+            event.stopPropagation();
+        });
+    
+        newSleeveHit.addEventListener("mouseover", (event) => {
+            document.body.style.cursor = 'pointer';
+            nudgeSleeves(albumCollection.indexOf(newRecord));
+            event.stopPropagation();
+        });
+    
+        newSleeveHit.addEventListener("mouseout", (event) => {
+            document.body.style.cursor = 'default';
+            revertSleeves();
+            event.stopPropagation();
+        });
+    
+        recordDuration = newRecord.duration;
+        armSpeed = (armEnd - (armStart)) / recordDuration;
+        var getEndCrackle = Math.random();
+        if(getEndCrackle < 0.33){
+            endCrackle = crackleEnd1;
+        }
+        if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
+            endCrackle = crackleEnd2;
+        }
+        if(getEndCrackle > 0.66){
+            endCrackle = crackleEnd3;
+        }
+    
+        albumCollection.push(newRecord);
+        document.getElementById("recordBuildPanel").classList.add("hidden");
+    
+        setTimeout(function(){
+            // Reset recordBuilder object
+            recordBuilder.tracks = [];
+            recordBuilder.trackNames = [];
+            recordBuilder.duration = 0;
+            recordBuilder.startTimes = [];
+            recordBuilder.art = null;
+        
+            // Clear title/artist fields
+            document.getElementById("builderTitle").value = "";
+            document.getElementById("builderArtist").value = "";
+        
+            // Reset album art to default
+            document.getElementById("builderAlbumArt").src = "defaultArt.png";
+        
+            // Clear track list UI
+            const trackList = document.getElementById("editableTrackList");
+            trackList.innerHTML = "";
+            document.getElementById("noTracksMsg").style.display = "block";
+            }, 300);
     }
-    newSleeve.rotation.x = 1.294;
-    newSleeveHit.rotation.x = 1.294;
 
-    newRecord.initialZ = newSleeve.position.z;
-    newRecord.targetPosition = newSleeve.position.clone();
-    newRecord.targetRotation = newSleeve.rotation.clone();
-
-    newSleeveHit.addEventListener("click", (event) => {
-        showRecordInfo(newRecord);
-        document.getElementById("recordInfoPanel").classList.add("visible");
-        event.stopPropagation();
-    });
-
-    newSleeveHit.addEventListener("mouseover", (event) => {
-        document.body.style.cursor = 'pointer';
-        nudgeSleeves(albumCollection.indexOf(newRecord));
-        event.stopPropagation();
-    });
-
-    newSleeveHit.addEventListener("mouseout", (event) => {
-        document.body.style.cursor = 'default';
-        revertSleeves();
-        event.stopPropagation();
-    });
-
-    recordDuration = newRecord.duration;
-    armSpeed = (armEnd - (armStart)) / recordDuration;
-    var getEndCrackle = Math.random();
-    if(getEndCrackle < 0.33){
-        endCrackle = crackleEnd1;
-    }
-    if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
-        endCrackle = crackleEnd2;
-    }
-    if(getEndCrackle > 0.66){
-        endCrackle = crackleEnd3;
-    }
-
-    albumCollection.push(newRecord);
     document.getElementById("recordBuildPanel").classList.add("hidden");
+    setTimeout(resetBuilder, 300);
 
-    setTimeout(function(){
-        // Reset recordBuilder object
-        recordBuilder.tracks = [];
-        recordBuilder.trackNames = [];
-        recordBuilder.duration = 0;
-        recordBuilder.startTimes = [];
-        recordBuilder.art = null;
-    
-        // Clear title/artist fields
-        document.getElementById("builderTitle").value = "";
-        document.getElementById("builderArtist").value = "";
-    
-        // Reset album art to default
-        document.getElementById("builderAlbumArt").src = "defaultArt.png";
-    
-        // Clear track list UI
-        const trackList = document.getElementById("editableTrackList");
-        trackList.innerHTML = "";
-        document.getElementById("noTracksMsg").style.display = "block";
-        }, 300);
 });
 
 document.getElementById("cancelBuildBtn").addEventListener("click", () => {
@@ -1338,6 +1368,11 @@ function loadEnv01(){
 }
 
 function nudgeSleeves(currentSleeve){
+    mouseActive = true;
+    clearTimeout(mouseActiveTimeout);
+    mouseActiveTimeout = setTimeout(() => {
+        mouseActive = false;
+    }, 2500);
     animateLibrary = true;
     albumCollection.forEach((record) => {
         if(albumCollection.indexOf(record) > currentSleeve){
@@ -1400,6 +1435,10 @@ function showRecordInfo(recordObj) {
     panel.classList.remove('hidden');
     document.getElementById('albumTitle').innerText = recordObj.name || "Unknown Album";
     document.getElementById('artistName').innerText = recordObj.artist || "Unknown Artist";
+    document.getElementById("editRecordBtn").onclick = () => {
+        editingRecord = recordObj;
+        openBuilderForEditing(recordObj);
+    };
     
     const trackList = document.getElementById('trackList');
     trackList.innerHTML = '';
@@ -1456,9 +1495,55 @@ function showRecordInfo(recordObj) {
     };
 }
 
-function getRandomArbitrary(min, max) {
-    return Math.random() * (max - min) + min;
-  }
+function openBuilderForEditing(recordObj) {
+    
+    document.getElementById('recordInfoPanel').classList.remove('visible');
+    document.getElementById("recordBuildPanel").classList.remove("hidden");
+
+    document.getElementById("builderTitle").value = recordObj.name;
+    document.getElementById("builderArtist").value = recordObj.artist;
+
+    recordBuilder.trackNames = [...recordObj.trackNames];
+    recordBuilder.tracks = [...recordObj.tracks];
+    recordBuilder.startTimes = [...recordObj.startTimes];
+    recordBuilder.duration = recordObj.duration;
+    recordBuilder.art = recordObj.art;
+
+    const builderTrackList = document.getElementById("editableTrackList");
+    builderTrackList.innerHTML = "";
+    document.getElementById("noTracksMsg").style.display = "none";
+
+    renderTrackListUI();
+
+    if (recordObj.art && recordObj.art instanceof HTMLImageElement) {
+        document.getElementById("builderAlbumArt").src = recordObj.art.src;
+    } else if (recordObj.art instanceof THREE.Texture) {
+        // Optional: convert to data URL if needed
+    }
+
+    // Change button to "Save Changes"
+    const addBtn = document.getElementById("addRecordBtn");
+    addBtn.textContent = "Save Changes";
+}
+
+function resetBuilder() {
+    recordBuilder.tracks = [];
+    recordBuilder.trackNames = [];
+    recordBuilder.startTimes = [];
+    recordBuilder.duration = 0;
+    recordBuilder.art = null;
+
+    document.getElementById("builderTitle").value = "";
+    document.getElementById("builderArtist").value = "";
+    document.getElementById("builderAlbumArt").src = "defaultArt.png";
+
+    const builderTrackList = document.getElementById("editableTrackList");
+    builderTrackList.innerHTML = "";
+    document.getElementById("noTracksMsg").style.display = "block";
+
+    editingRecord = null;
+    document.getElementById("addRecordBtn").textContent = "Add to Library";
+}
 
 function updateTrackOrderFromDOM() {
     const listItems = document.querySelectorAll('#editableTrackList .builder-track-row');
@@ -1489,6 +1574,54 @@ function updateTrackOrderFromDOM() {
     });
     recordBuilder.duration = runningTotal;
 }
+
+function renderTrackListUI() {
+    const builderTrackList = document.getElementById("editableTrackList");
+    builderTrackList.innerHTML = "";
+
+    recordBuilder.trackNames.forEach((title, i) => {
+        const li = document.createElement("li");
+        li.classList.add("builder-track-row");
+        li.dataset.index = i;
+        li.innerHTML = `
+            <span class="track-number">${i + 1}.</span>
+            <input type="text" class="track-edit" value="${title}">
+            <button class="delete-button" title="Remove track">&times;</button>
+        `;
+
+        li.querySelector(".track-edit").addEventListener("input", (e) => {
+            recordBuilder.trackNames[i] = e.target.value;
+        });
+
+        li.querySelector(".delete-button").addEventListener("click", () => {
+            recordBuilder.trackNames.splice(i, 1);
+            recordBuilder.tracks.splice(i, 1);
+            recalculateStartTimes();
+            renderTrackListUI();
+        });
+
+        builderTrackList.appendChild(li);
+    });
+
+    document.getElementById("noTracksMsg").style.display =
+        recordBuilder.trackNames.length === 0 ? "block" : "none";
+
+    setBuilderButtonStates(recordBuilder.tracks.length > 0);
+}
+
+function recalculateStartTimes() {
+    let runningTotal = 0;
+    recordBuilder.startTimes = [];
+    recordBuilder.tracks.forEach((track) => {
+        recordBuilder.startTimes.push(runningTotal);
+        runningTotal += track.duration();
+    });
+    recordBuilder.duration = runningTotal;
+}
+
+function getRandomArbitrary(min, max) {
+    return Math.random() * (max - min) + min;
+  }
 
 function fpsLimiter(fps, callback){
     const interval = 1000 / fps;
