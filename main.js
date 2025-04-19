@@ -12,6 +12,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import Sortable from 'sortablejs';
 import { gsap } from "gsap";
 import { Environment } from './EnvironmentHandler.js';
+import * as rive from "@rive-app/webgl2";
 
 // Set up variables
 var isTransitioning = false;
@@ -19,6 +20,8 @@ var meshLoaded = false;
 var audioLoaded = false;
 var currentRecordLoaded = null;
 var postProcessEnabled = true;
+var animationFrameId;
+var isRendering = false;
 const clock = new THREE.Clock();
 const textureLoader = new THREE.TextureLoader();
 var rpm = 0;
@@ -111,7 +114,7 @@ var trackQueue = [];  // Holds all Howl tracks
 var albumCollection = [];
 var currentTrackIndex = 0;
 var totalDuration = 0; // Sum of all tracks' durations
-var recordOffset = 0.00557;
+var recordOffset = 0.00757;
 
 class NewRecord {
     constructor(mesh, artist, name, tracks, trackNames, duration, startTimes, art, id, initialZ, targetRotation, targetPosition){
@@ -316,12 +319,6 @@ controls.minAzimuthAngle = -Math.PI / 4;
 controls.maxAzimuthAngle = Math.PI / 4;
 controls.target = new THREE.Vector3(0, 0.1, 0);
 controls.update();
-
-document.getElementById("buildRecordBtn").addEventListener("click", () => {
-    libraryPanel.classList.remove("visible"); // Close library panel
-    document.getElementById("recordBuildPanel").classList.remove("hidden");
-    setBuilderButtonStates(false); // Disable initially
-});
 
 document.getElementById("loadTracksToBuilderBtn").addEventListener("click", async () => {
     const loadBtn = document.getElementById("loadTracksToBuilderBtn");
@@ -634,17 +631,6 @@ document.getElementById("cancelBuildBtn").addEventListener("click", () => {
 
 });
 
-document.getElementById("changeSceneBtn").addEventListener('click', () => {
-    if(envNum == 1){
-        envNum = 2;
-    } else {
-        envNum = 1;
-    }    
-
-    changeScene(envNum);
-});
-
-
 document.addEventListener('mousemove', (event) => {
     if(isDragging){        
         if (dragTarget == toneArm) {
@@ -835,15 +821,6 @@ const toggleAntialiasing = document.getElementById("toggleAntialiasing");
 const crackleVolumeSlider = document.getElementById("crackleVolumeSlider");
 const overlay = document.getElementById("overlay");
 
-settingsBtn.addEventListener("click", () => {
-	overlay.classList.add("visible"); // Show overlay
-	settingsPanel.classList.add("visible");
-
-	// Ensure other panels are hidden when settings are opened
-	//recordBuildPanel.classList.add("hidden");
-	//libraryPanel.classList.remove("visible");
-});
-
 closeSettingsBtn.addEventListener("click", () => {
 	overlay.classList.remove("visible"); // Hide overlay
 	settingsPanel.classList.remove("visible");
@@ -854,7 +831,7 @@ togglePostProcessing.addEventListener("change", (event) => {
 });
 
 toggleAntialiasing.addEventListener("change", (event) => {
-	const pixelRatio = event.target.checked ? 2.0 : 1.25;
+	const pixelRatio = event.target.checked ? 2.0 : 1;
 	renderer.setPixelRatio(window.devicePixelRatio * pixelRatio);
 });
 
@@ -888,13 +865,13 @@ const sortOrderToggle = document.getElementById("sortOrderToggle");
 
 sortControls.addEventListener("change", renderLibrary);
 sortOrderToggle.addEventListener("change", renderLibrary);
-
+/*
 libraryBtn.addEventListener("click", () => {
 	recordBuildPanel.classList.add("hidden"); // Close build/edit panel
 	renderLibrary();
 	libraryPanel.classList.add("visible");
 });
-
+*/
 closeLibraryBtn.addEventListener("click", () => {
 	libraryPanel.classList.remove("visible");
 });
@@ -951,9 +928,137 @@ function renderLibrary() {
 	});
 }
 
+// Initialize the Rive animation for the library button
+const libraryCanvas = document.getElementById('libraryBtnCanvas');
+const libraryBtnContainer = document.getElementById('libraryBtnContainer');
+
+if (libraryCanvas && libraryBtnContainer) {
+    const libraryRive = new rive.Rive({
+        src: './librarybutton.riv',
+        canvas: libraryCanvas,
+        autoplay: true,
+        stateMachines: ['Hover'],
+        onLoad: () => {
+            // Ensure the drawing surface matches the canvas size and device pixel ratio
+            libraryRive.resizeDrawingSurfaceToCanvas();
+        },
+        onStateChange: (event) => {
+            const isHovering = event.data.some(stateName => stateName === 'animOver');
+            if (isHovering) {
+                document.body.style.cursor = 'pointer';
+            } else {
+                // Check if *any other* Rive instance might require a pointer
+                // (More robust solution needed if multiple Rive cursors exist)
+                // For now, assume this is the only one controlling the pointer
+                document.body.style.cursor = 'default';
+            }
+        }
+    });
+
+    // Add hover and click interactions for the library button
+    libraryBtnContainer.addEventListener('mouseenter', () => {
+        //document.body.style.cursor = 'pointer'; // Change pointer on hover
+    });
+    libraryBtnContainer.addEventListener('mouseleave', () => {
+        //document.body.style.cursor = 'default'; // Reset pointer
+    });
+    libraryBtnContainer.addEventListener('click', () => {
+        const libraryPanel = document.getElementById('libraryPanel');
+        const recordBuildPanel = document.getElementById('recordBuildPanel');
+        recordBuildPanel.classList.add('hidden'); // Close build/edit panel
+        renderLibrary();
+        libraryPanel.classList.add('visible');
+    });
+} else {
+    console.error('libraryBtnCanvas or libraryBtnContainer not found. Check index.html for correct IDs.');
+}
+
+// Initialize the Rive animation for the "New Record" button
+const buildRecordCanvas = document.getElementById('buildRecordBtnCanvas');
+const buildRecordBtnContainer = document.getElementById('buildRecordBtnContainer');
+
+if (buildRecordCanvas && buildRecordBtnContainer) {
+    const buildRecordRive = new rive.Rive({
+        src: './newrecordbutton.riv',
+        canvas: buildRecordCanvas,
+        autoplay: true,
+        stateMachines: ['Hover'],
+        onLoad: () => {
+            buildRecordRive.resizeDrawingSurfaceToCanvas();
+        },
+        onStateChange: (event) => {
+            const isHovering = event.data.some(stateName => stateName === 'animOver');
+            document.body.style.cursor = isHovering ? 'pointer' : 'default';
+        }
+    });
+
+    buildRecordBtnContainer.addEventListener('click', () => {
+        libraryPanel.classList.remove('visible'); // Close library panel
+        document.getElementById('recordBuildPanel').classList.remove('hidden');
+        setBuilderButtonStates(false); // Disable initially
+    });
+}
+
+// Initialize the Rive animation for the "Change Scene" button
+const changeSceneCanvas = document.getElementById('changeSceneBtnCanvas');
+const changeSceneBtnContainer = document.getElementById('changeSceneBtnContainer');
+
+if (changeSceneCanvas && changeSceneBtnContainer) {
+    const changeSceneRive = new rive.Rive({
+        src: './scenebutton.riv',
+        canvas: changeSceneCanvas,
+        autoplay: true,
+        stateMachines: ['Hover'],
+        onLoad: () => {
+            changeSceneRive.resizeDrawingSurfaceToCanvas();
+        },
+        onStateChange: (event) => {
+            const isHovering = event.data.some(stateName => stateName === 'animOver');
+            document.body.style.cursor = isHovering ? 'pointer' : 'default';
+        }
+    });
+
+    changeSceneBtnContainer.addEventListener('click', () => {
+        envNum = envNum === 1 ? 2 : 1;
+        changeScene(envNum);
+    });
+}
+
+// Initialize the Rive animation for the "Settings" button
+const settingsCanvas = document.getElementById('settingsBtnCanvas');
+const settingsBtnContainer = document.getElementById('settingsBtnContainer');
+
+if (settingsCanvas && settingsBtnContainer) {
+    const settingsRive = new rive.Rive({
+        src: './settingsbutton.riv',
+        canvas: settingsCanvas,
+        autoplay: true,
+        stateMachines: ['Hover'],
+        onLoad: () => {
+            settingsRive.resizeDrawingSurfaceToCanvas();
+        },
+        onStateChange: (event) => {
+            const isHovering = event.data.some(stateName => stateName === 'animOver');
+            document.body.style.cursor = isHovering ? 'pointer' : 'default';
+        }
+    });
+
+    settingsBtnContainer.addEventListener('click', () => {
+        overlay.classList.add('visible'); // Show overlay
+        settingsPanel.classList.add('visible');
+    });
+}
+
 //Render loop
 function render(){    
+    animationFrameId = requestAnimationFrame(render);
+    if (isRendering) return;
+    isRendering = true;
 
+    requestAnimationFrame(() => {
+        isRendering = false;
+        render();
+    });
     if(meshLoaded){
         let deltaTime = clock.getDelta();
         const maxDeltaTime = 1 / 30;
@@ -1061,8 +1166,7 @@ function render(){
     }
 
     updateIntMan();
-    controls.update();
-    requestAnimationFrame(render);    
+    controls.update();  
     if(mouseActive || rpm > 0.1){
         if(postProcessEnabled){
             composer.render();
@@ -1077,7 +1181,8 @@ function render(){
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
         // When tab becomes visible again:
-        requestAnimationFrame(render);
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(render);
         if (recordEnded && !needleLifted && audioLoaded) {
             // Snap tonearm to end position
             yawBone.rotation.y = armEnd;
@@ -1700,5 +1805,42 @@ function fpsLimiter(fps, callback){
 	};
 }
 
-render();
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        // When tab becomes visible again:
+        clock.getDelta(); // Call getDelta() to reset the timer after a potential long pause
+        startRenderLoop(); // Restart the loop
+        if (recordEnded && !needleLifted && audioLoaded) {
+            // Snap tonearm to end position
+            yawBone.rotation.y = armEnd;
+        }
+    } else {
+        // When tab becomes hidden:
+        stopRenderLoop(); // Stop the loop
+    }
+});
+
 onWindowResize();
+
+function startRenderLoop() {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    animationFrameId = requestAnimationFrame(function animate(time) {
+         // Check visibility again in case it changed right after requesting
+        if (document.visibilityState === "hidden") {
+            return; // Don't render if hidden now
+        }
+        render(time); // Pass time if needed by logic, otherwise just call render()
+        animationFrameId = requestAnimationFrame(animate); // Continue the loop
+    });
+}
+
+function stopRenderLoop() {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+}
+
+startRenderLoop();

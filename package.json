@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "electron-main.js",
   "dependencies": {
+    "@rive-app/canvas": "^2.27.0",
+    "@rive-app/webgl2": "^2.27.0",
     "gsap": "^3.12.7",
     "howler": "^2.2.4",
     "music-metadata": "^11.0.2",
@@ -10,7 +12,7 @@
     "three": "^0.173.0",
     "three.interactive": "^1.8.0"
   },
-    "scripts": {
+  "scripts": {
     "dev": "vite",
     "electron": "electron .",
     "start": "concurrently \"npm:dev\" \"npm:electron\""
