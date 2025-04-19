@@ -8,8 +8,10 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import Sortable from 'sortablejs';
 import { gsap } from "gsap";
+import { Environment } from './EnvironmentHandler.js';
 
 // Set up variables
 var isTransitioning = false;
@@ -34,7 +36,6 @@ var sleeveHit = null;
 var toneArm = null;
 var toneArmNeedle = null;
 var speedDial = null;
-var groundPlane = null;
 var yawBone = null;
 var yawTarget = 0;
 var dialTarget = 0;
@@ -49,21 +50,13 @@ var recordLoaded = false;
 var isDragging = false;
 var mouseActive = false;
 var mouseActiveTimeout;
-var objectsMoving = false;
 var dragStarted = false;
 var isSeeking = false;
-var sceneChanged = false;
 var animateLibrary = false;
 var needleOverRecord = false;
 var seekTimeout = null;
 var dragTarget = null;
 var envNum = 0;
-var env0X = 0.45;
-var env1X = 0.438;
-var env0Y = 0.0541;
-var env1Y = -0.153;
-var env0Z = -0.13;
-var env1Z = -0.195;
 var dragStartY = 0;
 var totalDragDistance = 0;
 var dragThreshold = 30;
@@ -134,6 +127,7 @@ class NewRecord {
         this.initialZ = initialZ;
         this.targetRotation = new THREE.Quaternion(targetRotation);
         this.targetPosition = new THREE.Vector3(targetPosition);
+        this.recordHit = null;
     }
 }
 
@@ -147,21 +141,21 @@ var ambCrackle = new Howl({
 var crackleEnd1 = new Howl({
     src: ['./record_end_01.mp3'],
     rate: 1, 
-    volume: 0.3,
+    volume: 0.4,
     loop: true
 });
 
 var crackleEnd2 = new Howl({
     src: ['./record_end_02.mp3'],
     rate: 1, 
-    volume: 0.3,
+    volume: 0.4,
     loop: true
 });
 
 var crackleEnd3 = new Howl({
     src: ['./record_end_03.mp3'],
     rate: 1, 
-    volume: 0.3,
+    volume: 0.4,
     loop: true
 });
 
@@ -185,6 +179,13 @@ const environmentTexture = new THREE.CubeTextureLoader().setPath('./').load(['px
 scene.environment = environmentTexture;
 scene.environmentIntensity = 0.7;
 scene.environmentRotation.y = 3.4;
+
+// Set environment
+envNum = 1;
+const environment = new Environment(scene, envNum);
+environment.lights = environment.getLights(envNum);
+environment.changeScene();
+replaceRecords(envNum);
 
 // Add camera
 const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -302,62 +303,6 @@ loader.load('sleeve_01.glb', (gltf) => {
     sleeveHit.receiveShadow = false;
 });
 
-loader.load('groundPlane_01.glb', (gltf) => {
-    gltf.scene.traverse( function( child ) { 
-        if ( child.isMesh ) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-            child.frustumCulled = false;
-        }
-    });  
-    
-    groundPlane = gltf.scene;
-    const ground = groundPlane.getObjectByName("ground");
-    ground.material.dithering = true;
-    scene.add(groundPlane);
-});
-
-// Add lights
-const light = new THREE.DirectionalLight(0xC67385, 4.25)
-light.position.set(-1, 4, -1);
-light.castShadow = true;
-light.shadow.mapSize.width = 1024;
-light.shadow.mapSize.height = 1024;
-light.shadow.camera.near = 0.1;
-light.shadow.camera.far = 7;
-light.shadow.camera.left = -2;
-light.shadow.camera.right = 2;
-light.shadow.camera.top = 2;
-light.shadow.camera.bottom = -2;
-light.shadow.bias = -0.0005;
-light.shadow.radius = 2;
-light.shadow.blurSamples = 8;
-scene.add(light);
-
-const light2 = new THREE.DirectionalLight(0xFFFFF, 2.25)
-light2.position.set(1, 4, 1);
-light2.castShadow = true;
-light2.shadow.mapSize.width = 1024;
-light2.shadow.mapSize.height = 1024;
-light2.shadow.camera.near = 0.1;
-light2.shadow.camera.far = 7;
-light2.shadow.camera.left = -2;
-light2.shadow.camera.right = 2;
-light2.shadow.camera.top = 2;
-light2.shadow.camera.bottom = -2;
-light2.shadow.bias = -0.0005;
-light2.shadow.radius = 2;
-light2.shadow.blurSamples = 8;
-scene.add(light2);
-
-const light3 = new THREE.DirectionalLight(0xFFFFFF, 0.04)
-light3.position.set(2, 2, -2);
-light3.castShadow = false;
-scene.add(light3);
-
-//const shadowCameraHelper = new THREE.CameraHelper( light.shadow.camera );
-//scene.add( shadowCameraHelper );
-
 // Controls for the camera orbit
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -373,6 +318,7 @@ controls.target = new THREE.Vector3(0, 0.1, 0);
 controls.update();
 
 document.getElementById("buildRecordBtn").addEventListener("click", () => {
+    libraryPanel.classList.remove("visible"); // Close library panel
     document.getElementById("recordBuildPanel").classList.remove("hidden");
     setBuilderButtonStates(false); // Disable initially
 });
@@ -447,6 +393,9 @@ document.getElementById("loadTracksToBuilderBtn").addEventListener("click", asyn
                         } else {
                             // We're at the last track — mark it as ended
                             recordEnded = true;
+                            if (!endCrackle.playing()) {
+                                endCrackle.play();
+                            }
                         }
                     }
                 }
@@ -583,16 +532,11 @@ document.getElementById("addRecordBtn").addEventListener("click", () => {
         newRecord.startTimes = recordBuilder.startTimes;
         newRecord.duration = recordBuilder.duration;
         newRecord.art = recordBuilder.art;
+        newRecord.recordHit = newSleeveHit;
     
         applyAlbumArtToRecord(newRecord.art, newRecord.mesh, newRecord, false);
-    
-        if (envNum == 0) {
-            newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
-            newSleeveHit.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
-        } else {
-            newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
-            newSleeveHit.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
-        }
+        newSleeve.position.set(environment.recordX + getRandomArbitrary(-0.0015, 0.0015), environment.recordY, environment.recordZ + (recordOffset * (albumCollection.length + 1)));
+        newSleeveHit.position.set(environment.recordX + getRandomArbitrary(-0.0015, 0.0015), environment.recordY, environment.recordZ + (recordOffset * (albumCollection.length + 1)));
         newSleeve.rotation.x = 1.294;
         newSleeveHit.rotation.x = 1.294;
     
@@ -691,10 +635,13 @@ document.getElementById("cancelBuildBtn").addEventListener("click", () => {
 });
 
 document.getElementById("changeSceneBtn").addEventListener('click', () => {
-    if(!sceneChanged){
-        loadEnv01();
-        sceneChanged = true;
-    }
+    if(envNum == 1){
+        envNum = 2;
+    } else {
+        envNum = 1;
+    }    
+
+    changeScene(envNum);
 });
 
 
@@ -773,11 +720,30 @@ aperture: 0.01,
 maxblur: 0.005
 });
 
+const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+bloomPass.threshold = 0.1;
+bloomPass.strength = 0.1;
+bloomPass.radius = 1;
+
 const outputPass = new OutputPass();
 const composer = new EffectComposer( renderer );
 composer.addPass( renderScene );
 composer.addPass( bokehPass );
+composer.addPass( bloomPass );
 composer.addPass( outputPass );
+
+window.addEventListener('resize', onWindowResize);
+
+function onWindowResize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(width, height);
+    composer.setSize(width, height); // if you're using postprocessing
+}
 
 const powerSaver = fpsLimiter(5, (now) => {
     if(postProcessEnabled){
@@ -860,6 +826,131 @@ const updateIntMan = fpsLimiter(20, (now) => {
     intMan.update();
 });
 
+// Settings panel logic
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsPanel = document.getElementById("settingsPanel");
+const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+const togglePostProcessing = document.getElementById("togglePostProcessing");
+const toggleAntialiasing = document.getElementById("toggleAntialiasing");
+const crackleVolumeSlider = document.getElementById("crackleVolumeSlider");
+const overlay = document.getElementById("overlay");
+
+settingsBtn.addEventListener("click", () => {
+	overlay.classList.add("visible"); // Show overlay
+	settingsPanel.classList.add("visible");
+
+	// Ensure other panels are hidden when settings are opened
+	//recordBuildPanel.classList.add("hidden");
+	//libraryPanel.classList.remove("visible");
+});
+
+closeSettingsBtn.addEventListener("click", () => {
+	overlay.classList.remove("visible"); // Hide overlay
+	settingsPanel.classList.remove("visible");
+});
+
+togglePostProcessing.addEventListener("change", (event) => {
+	postProcessEnabled = event.target.checked;
+});
+
+toggleAntialiasing.addEventListener("change", (event) => {
+	const pixelRatio = event.target.checked ? 2.0 : 1.25;
+	renderer.setPixelRatio(window.devicePixelRatio * pixelRatio);
+});
+
+crackleVolumeSlider.addEventListener("input", (event) => {
+	const volume = parseFloat(event.target.value);
+	ambCrackle.volume(volume);
+	crackleEnd1.volume(volume * 0.8);
+	crackleEnd2.volume(volume * 0.8);
+	crackleEnd3.volume(volume * 0.8);
+});
+
+// Prevent interaction with elements behind the overlay
+overlay.addEventListener("click", () => {
+	overlay.classList.remove("visible");
+	settingsPanel.classList.remove("visible");
+});
+
+// Initialize settings panel values
+togglePostProcessing.checked = postProcessEnabled;
+toggleAntialiasing.checked = renderer.getPixelRatio() > 1.25;
+crackleVolumeSlider.value = ambCrackle.volume();
+
+// Library panel logic
+const libraryBtn = document.getElementById("libraryBtn");
+const libraryPanel = document.getElementById("libraryPanel");
+const closeLibraryBtn = document.getElementById("closeLibraryBtn");
+const libraryList = document.getElementById("libraryList");
+
+const sortControls = document.getElementById("sortControls");
+const sortOrderToggle = document.getElementById("sortOrderToggle");
+
+sortControls.addEventListener("change", renderLibrary);
+sortOrderToggle.addEventListener("change", renderLibrary);
+
+libraryBtn.addEventListener("click", () => {
+	recordBuildPanel.classList.add("hidden"); // Close build/edit panel
+	renderLibrary();
+	libraryPanel.classList.add("visible");
+});
+
+closeLibraryBtn.addEventListener("click", () => {
+	libraryPanel.classList.remove("visible");
+});
+
+function renderLibrary() {
+	libraryList.innerHTML = ""; // Clear the list
+
+	const sortBy = document.querySelector('input[name="sortBy"]:checked').value;
+	const descending = sortOrderToggle.checked;
+
+	const sortedRecords = [...albumCollection].sort((a, b) => {
+		const fieldA = sortBy === "artist" ? a.artist : a.name;
+		const fieldB = sortBy === "artist" ? b.artist : b.name;
+		return descending
+			? fieldB.localeCompare(fieldA)
+			: fieldA.localeCompare(fieldB);
+	});
+
+	sortedRecords.forEach((record) => {
+		const li = document.createElement("li");
+		li.classList.add("library-item");
+		li.innerHTML = `
+			<span>${record.name} - ${record.artist}</span>
+			<div>
+				<button class="ui-button load-btn">Load to Player</button>
+				<button class="ui-button edit-btn">Edit</button>
+			</div>
+		`;
+
+		const loadBtn = li.querySelector(".load-btn");
+		const editBtn = li.querySelector(".edit-btn");
+
+		// Disable "Load to Player" button if the record is already loaded
+		const isAlreadyLoaded = currentRecordLoaded && record.id === currentRecordLoaded.id;
+		loadBtn.disabled = isAlreadyLoaded;
+
+		loadBtn.addEventListener("click", () => {
+			if (!isAlreadyLoaded) {
+				if (!recordLoaded) {
+					loadRecordToDeck(record);
+				} else {
+					loadRecordToDeckAnim(record);
+				}
+				renderLibrary(); // Refresh library to update button states
+			}
+		});
+
+		editBtn.addEventListener("click", () => {
+			openBuilderForEditing(record);
+			libraryPanel.classList.remove("visible");
+		});
+
+		libraryList.appendChild(li);
+	});
+}
+
 //Render loop
 function render(){    
 
@@ -873,26 +964,57 @@ function render(){
         updateRpm();
            
         // Move the needle towards the start point if dropped close to the edge
-        if(!isTransitioning){
-            pitchBone.quaternion.slerp(pitchTarget, 0.1);     
-            if(yawBone.rotation.y > armStart + 0.1){
+        if (!isTransitioning) {
+            pitchBone.quaternion.slerp(pitchTarget, 0.1);
+        
+            // Update needleOverRecord status
+            if (yawBone.rotation.y > armStart + 0.1) {
                 needleOverRecord = false;
             } else {
                 needleOverRecord = true;
             }
-            if(yawBone.rotation.y > armStart && yawBone.rotation.y < armStart + 0.02 && !needleLifted){
-                yawBone.rotation.y += ((armSpeed * 25) * deltaTime) * rpmMulti;  
-            }
-            if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
-                yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
-    
-                if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded && rpmMulti > 0.01){
-                    trackQueue[currentTrackIndex].play()
+        
+            // 🧠 Only apply auto tonearm movement if NOT dragging or lifted
+            const canAutoMove = !needleLifted && !isDragging && dragTarget !== toneArm && audioLoaded && trackQueue.length > 0;
+        
+            if (canAutoMove) {
+                const currentTrack = trackQueue[currentTrackIndex];
+                if (currentTrack && currentTrack.playing()) {
+                    const globalTime = trackStartTimes[currentTrackIndex] + currentTrack.seek();
+                    posInRecord = THREE.MathUtils.clamp(globalTime / totalDuration, 0, 1);
+                    const targetYaw = THREE.MathUtils.lerp(armStart, armEnd, posInRecord);
+                    yawBone.rotation.y = THREE.MathUtils.lerp(yawBone.rotation.y, targetYaw, 0.01);
                 }
             }
-        } else {
-            //yawBone.rotation.y = THREE.MathUtils.lerp(yawBone.rotation.y, yawTarget, 0.075);
-            speedDial.rotation.y = THREE.MathUtils.lerp(speedDial.rotation.y, dialTarget, 0.35);
+        
+            // 🧲 Sticky edge behavior when dropped very close to start
+            if (
+                yawBone.rotation.y > armStart &&
+                yawBone.rotation.y < armStart + 0.02 &&
+                !needleLifted
+            ) {
+                yawBone.rotation.y += ((armSpeed * 25) * deltaTime) * rpmMulti;
+            }
+        
+            // 🔁 Still allow gradual passive drift if tonearm behind
+            if (
+                yawBone.rotation.y < armStart &&
+                yawBone.rotation.y > armEnd &&
+                dragTarget !== toneArm &&
+                !needleLifted
+            ) {
+                yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;
+        
+                if (
+                    trackQueue.length > 0 &&
+                    !trackQueue[currentTrackIndex].playing() &&
+                    yawBone.rotation.y > armEnd + 0.0005 &&
+                    !recordEnded &&
+                    rpmMulti > 0.01
+                ) {
+                    trackQueue[currentTrackIndex].play();
+                }
+            }
         }
 
         updateNonDeltaTone();
@@ -951,6 +1073,17 @@ function render(){
         powerSaver();
     }    
 }
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        // When tab becomes visible again:
+        requestAnimationFrame(render);
+        if (recordEnded && !needleLifted && audioLoaded) {
+            // Snap tonearm to end position
+            yawBone.rotation.y = armEnd;
+        }
+    }
+});
 
 function norm(value, min, max) {
     return (value - min) / (max - min);
@@ -1190,6 +1323,14 @@ async function loadRecordToDeckAnim(recordObj) {
         }
     }, 250);
 
+    gsap.to(speedDial.rotation, {
+        y: dialPos2,
+        duration: 0.25,
+        ease: "power2.out",
+    });
+
+    dialTarget = dialPos2;
+
 	// 2: Animate tonearm up and home
 	await animateTonearmHome();
 
@@ -1277,94 +1418,31 @@ function animateRecordLiftAndSpin(recordObj) {
 	});
 }
 
-function loadEnv01(){
-
-    envNum = 1;
+function replaceRecords(){
 
     if(albumCollection.length > 0){
         albumCollection.forEach((record) => {
-            record.mesh.position.x = env1X;
-            record.targetPosition.x = env1X;
+            record.mesh.position.x = environment.recordX;
+            record.recordHit.position.x = environment.recordX;
+            record.targetPosition.x = environment.recordX;
             
-            record.mesh.position.y = env1Y;
-            record.targetPosition.y = env1Y;
+            record.mesh.position.y = environment.recordY;
+            record.recordHit.position.y = environment.recordY;
+            record.targetPosition.y = environment.recordY;
 
-            record.mesh.position.z = env1Z + (recordOffset * (albumCollection.indexOf(record) + 1));
-            record.targetPosition.z = env1Z + (recordOffset * (albumCollection.indexOf(record) + 1));
+            record.mesh.position.z = environment.recordZ + (recordOffset * (albumCollection.indexOf(record) + 1));
+            record.recordHit.position.z = environment.recordZ + (recordOffset * (albumCollection.indexOf(record) + 1));
+            record.targetPosition.z = environment.recordZ + (recordOffset * (albumCollection.indexOf(record) + 1));
             record.initialZ = record.mesh.position.z;
         });
     }
+}
 
-    
-    scene.remove(light);
-    scene.remove(light2);
-    scene.remove(light3);
+function changeScene(newSceneNum){
 
-    // Adjust environment and tone mapping
-    renderer.toneMappingExposure = 1.75;
-    scene.environmentIntensity = 0.75;
-    scene.environmentRotation.y = 11.4;
-
-    // Adjust lights
-    const sc1Light = new THREE.DirectionalLight(0xede2b4, 11)
-    sc1Light.position.set(5.6, 1.5, 6.3);
-    sc1Light.castShadow = true;
-    sc1Light.shadow.mapSize.width = 2048;
-    sc1Light.shadow.mapSize.height = 2048;
-    sc1Light.shadow.camera.near = 4;
-    sc1Light.shadow.camera.far = 10;
-    sc1Light.shadow.camera.left = -1.2;
-    sc1Light.shadow.camera.right = 1.5;
-    sc1Light.shadow.camera.top = 1;
-    sc1Light.shadow.camera.bottom = -1;
-    sc1Light.shadow.bias = -0.002;
-    sc1Light.shadow.radius = 2;
-    sc1Light.shadow.blurSamples = 32;
-
-    const sc2Light = new THREE.DirectionalLight(0xb4c6d3, 0.05)
-    sc2Light.position.set(1, 0.8, -1);
-    sc2Light.castShadow = false;
-    
-    const sc3Light = new THREE.DirectionalLight(0xFFFFFF, 0.5)
-    sc3Light.position.set(0, 0.7, 0);
-    sc3Light.castShadow = true;
-    sc3Light.shadow.mapSize.width = 1024;
-    sc3Light.shadow.mapSize.height = 1024;
-    sc3Light.shadow.camera.near = 0.5;
-    sc3Light.shadow.camera.far = 1.4;
-    sc3Light.shadow.camera.left = -0.5;
-    sc3Light.shadow.camera.right = 1;
-    sc3Light.shadow.camera.top = 0.3;
-    sc3Light.shadow.camera.bottom = -0.3;
-    sc3Light.shadow.bias = -0.0001;
-    sc3Light.shadow.radius = 3;
-    sc3Light.shadow.blurSamples = 16;
-    sc3Light.shadow.intensity = 1.6;
-
-    scene.add(sc1Light);
-    scene.add(sc2Light);
-    scene.add(sc3Light);
-
-    //const shadowCameraHelper = new THREE.CameraHelper( sc3Light.shadow.camera );
-    //scene.add( shadowCameraHelper );
-
-    // Change environment    
-    loader.load('env_01.glb', (gltf) => {
-        gltf.scene.traverse( function( child ) { 
-            if ( child.isMesh ) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                child.frustumCulled = false;
-            }
-        });  
-        
-        const mesh = gltf.scene;
-        scene.add(mesh);
-    });
-
-    scene.remove(groundPlane);
-
-    controls.maxPolarAngle = 1.4;
+    environment.background = newSceneNum;
+    environment.changeScene();
+    replaceRecords(newSceneNum);
 }
 
 function nudgeSleeves(currentSleeve){
@@ -1380,41 +1458,27 @@ function nudgeSleeves(currentSleeve){
         }
         if(albumCollection.indexOf(record) == currentSleeve){
             if(currentSleeve < albumCollection.length - 1){
-                if(envNum == 0){
-                    record.targetPosition.y = 0.125;
-                }
-                if(envNum == 1){
-                    record.targetPosition.y = -0.075;
-                }
+                
+                record.targetPosition.y = environment.recordY + 0.05;
                 if(currentSleeve > 0){
-                    record.targetPosition.z = record.initialZ - 0.025;
-                } else {
-                    record.targetPosition.z = record.initialZ - 0.025;
+                    record.targetPosition.z = record.initialZ - 0.001;
                 }
-
             }
-
             record.targetRotation.x = 1.45;
-            if(envNum == 0){
-                record.targetPosition.y = 0.125;
-            }
-            if(envNum == 1){
-                record.targetPosition.y = -0.075;
-            }
-            
+            record.targetPosition.y = environment.recordY + 0.05;
         }
     });
 };
 
 function revertSleeves(){
+    mouseActive = true;
+    clearTimeout(mouseActiveTimeout);
+    mouseActiveTimeout = setTimeout(() => {
+        mouseActive = false;
+    }, 2500);
     albumCollection.forEach((record) => {
         record.targetRotation.x = 1.294;
-        if(envNum == 0){
-            record.targetPosition.y = 0.0541;
-        }
-        if(envNum == 1){
-            record.targetPosition.y = -0.153;
-        }
+        record.targetPosition.y = environment.recordY;
         record.targetPosition.z = record.initialZ;
     });
 };
@@ -1637,3 +1701,4 @@ function fpsLimiter(fps, callback){
 }
 
 render();
+onWindowResize();
