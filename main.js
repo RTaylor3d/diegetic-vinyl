@@ -1051,14 +1051,7 @@ if (settingsCanvas && settingsBtnContainer) {
 
 //Render loop
 function render(){    
-    animationFrameId = requestAnimationFrame(render);
-    if (isRendering) return;
-    isRendering = true;
 
-    requestAnimationFrame(() => {
-        isRendering = false;
-        render();
-    });
     if(meshLoaded){
         let deltaTime = clock.getDelta();
         const maxDeltaTime = 1 / 30;
@@ -1176,8 +1169,10 @@ function render(){
     } else {
         powerSaver();
     }    
-}
 
+    requestAnimationFrame(render);
+}
+/*
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
         // When tab becomes visible again:
@@ -1189,7 +1184,7 @@ document.addEventListener("visibilitychange", () => {
         }
     }
 });
-
+*/
 function norm(value, min, max) {
     return (value - min) / (max - min);
 }
@@ -1804,7 +1799,7 @@ function fpsLimiter(fps, callback){
 		}
 	};
 }
-
+/*
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
         // When tab becomes visible again:
@@ -1844,3 +1839,5 @@ function stopRenderLoop() {
 }
 
 startRenderLoop();
+*/
+render();
