@@ -1,0 +1,5 @@
+release-build/turntable-app-win32-x64.zip
+/release-build
+node_modules/electron/dist/electron.exe
+/release-build/turntable-app-win32-x64
+release-build/turntable-app-win32-x64/turntable-app.exe
