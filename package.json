@@ -1,13 +1,12 @@
 {
+  "name": "turntable-app",
+  "version": "1.0.0",
+  "main": "electron-main.js",
   "dependencies": {
+    "@rive-app/canvas": "^2.27.0",
+    "@rive-app/webgl2": "^2.27.0",
+    "gsap": "^3.12.7",
     "howler": "^2.2.4",
-<<<<<<< Updated upstream
-    "music-metadata": "^11.0.2",
-    "three": "^0.173.0",
-    "three.interactive": "^1.8.0"
-  },
-  "devDependencies": {
-=======
     "music-metadata": "^11.2.1",
     "music-metadata-browser": "^2.5.11",
     "sortablejs": "^1.15.6",
@@ -24,7 +23,6 @@
     "concurrently": "^8.2.2",
     "electron": "^35.2.0",
     "electron-packager": "^17.1.2",
->>>>>>> Stashed changes
     "vite": "^6.1.1"
   }
 }

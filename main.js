@@ -7,6 +7,11 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import Sortable from 'sortablejs';
+import { gsap } from "gsap";
+import { Environment } from './EnvironmentHandler.js';
+import * as rive from "@rive-app/webgl2";
 
 // --- Electron Detection ---
 const isElectron = !!window.electronAPI;
@@ -21,15 +26,15 @@ if (isElectron) {
 const getBasename = (filePath) => filePath.split(/[\\/]/).pop();
 
 // Set up variables
+var isTransitioning = false;
 var meshLoaded = false;
 var audioLoaded = false;
+var currentRecordLoaded = null;
 var postProcessEnabled = true;
-<<<<<<< Updated upstream
-=======
 var initialSceneSet = false; // Flag to ensure scene is set only once
 let environment = null;
->>>>>>> Stashed changes
 const clock = new THREE.Clock();
+const textureLoader = new THREE.TextureLoader();
 var rpm = 0;
 var recordSpeed = 45;
 var rpmTarget = 0;
@@ -37,11 +42,14 @@ var rpmMulti = 0;
 var angularVelocity = (rpm * 2 * Math.PI) / 60;
 var platter = null;
 var record = null;
+var editingRecord = null;
+var recordInitialY = 0;
 var recordLabel = null;
 var sleeve = null;
+var sleeveHit = null;
 var toneArm = null;
+var toneArmNeedle = null;
 var speedDial = null;
-var groundPlane = null;
 var yawBone = null;
 var yawTarget = 0;
 var dialTarget = 0;
@@ -49,47 +57,28 @@ var pitchBone = null;
 var pitchClone = null;
 var pitchTarget = new THREE.Quaternion(0, 0, 0, 0);
 const mouse = new THREE.Vector2();
-<<<<<<< Updated upstream
-=======
 var mouseScreenX = 0;
 var mouseScreenY = 0;
->>>>>>> Stashed changes
 var needleLifted = true;
 var recordEnded = false;
+var recordLoaded = false;
 var isDragging = false;
-<<<<<<< Updated upstream
-=======
 var mouseActive = false;
 var mouseActiveTimeout;
 var powerDownDelay = 15000;
->>>>>>> Stashed changes
 var dragStarted = false;
 var isSeeking = false;
-var sceneChanged = false;
 var animateLibrary = false;
+var needleOverRecord = false;
 var seekTimeout = null;
 var dragTarget = null;
-<<<<<<< Updated upstream
-var envNum = 0;
-var env0X = 0.45;
-var env1X = 0.438;
-var env0Y = 0.0541;
-var env1Y = -0.153;
-var env0Z = -0.13;
-var env1Z = -0.195;
-=======
 var envNum = 1;
->>>>>>> Stashed changes
 var dragStartY = 0;
 var totalDragDistance = 0;
 var dragThreshold = 30;
 var posInRecord = 0;
-<<<<<<< Updated upstream
-var recordDuration = 0;
-=======
 var armInitialY = 0;
 var armInitialX = 0;
->>>>>>> Stashed changes
 var armSpeed = 0;
 var armStart = -0.540;
 var armEnd = -0.834;
@@ -106,8 +95,6 @@ var pausedTime = 0;
 var seekTime = 0;
 var movedToNextTrack = false; // Add this flag
 
-<<<<<<< Updated upstream
-=======
 const sortable = new Sortable(document.getElementById('editableTrackList'), {
     animation: 200,
     handle: '.track-number',
@@ -127,7 +114,6 @@ const recordBuilder = {
     trackPaths: [] // Added trackPaths
 };
 
->>>>>>> Stashed changes
 const trackPickerOpts = {
     types: [
       {
@@ -148,10 +134,6 @@ var trackQueue = [];  // Holds all Howl tracks
 var albumCollection = [];
 var currentTrackIndex = 0;
 var totalDuration = 0; // Sum of all tracks' durations
-<<<<<<< Updated upstream
-var recordOffset = 0.00557;
-=======
->>>>>>> Stashed changes
 
 class NewRecord {
     constructor(mesh, artist, name, tracks, trackNames, duration, startTimes, art, id, initialZ, targetRotation, targetPosition, trackPaths = [], artPath = null){
@@ -165,10 +147,6 @@ class NewRecord {
         this.art = art; // THREE.Texture or raw data { data, format } (runtime)
         this.id = id;
         this.initialZ = initialZ;
-<<<<<<< Updated upstream
-        this.targetRotation = new THREE.Quaternion(targetRotation);
-        this.targetPosition = new THREE.Vector3(targetPosition);
-=======
         this.targetRotation = targetRotation ? new THREE.Quaternion().copy(targetRotation) : new THREE.Quaternion();
         this.targetPosition = targetPosition ? new THREE.Vector3().copy(targetPosition) : new THREE.Vector3();
         this.recordHit = null;
@@ -192,60 +170,39 @@ class NewRecord {
             targetRotation: { x: this.targetRotation.x, y: this.targetRotation.y, z: this.targetRotation.z, w: this.targetRotation.w },
             targetPosition: { x: this.targetPosition.x, y: this.targetPosition.y, z: this.targetPosition.z }
         };
->>>>>>> Stashed changes
     }
 }
 
 var ambCrackle = new Howl({
     src: ['./vinyl-crackle-33rpm-6065.mp3'],
     rate: 1, 
-<<<<<<< Updated upstream
-    volume: 0.4,
-    loop: true
-=======
     volume: 0.5,
     loop: true,
     html5: false // Ensure Web Audio API
->>>>>>> Stashed changes
 });
 
 var crackleEnd1 = new Howl({
     src: ['./record_end_01.mp3'],
     rate: 1, 
-<<<<<<< Updated upstream
-    volume: 0.3,
-    loop: true
-=======
     volume: 0.4,
     loop: true,
     html5: false // Ensure Web Audio API
->>>>>>> Stashed changes
 });
 
 var crackleEnd2 = new Howl({
     src: ['./record_end_02.mp3'],
     rate: 1, 
-<<<<<<< Updated upstream
-    volume: 0.3,
-    loop: true
-=======
     volume: 0.4,
     loop: true,
     html5: false // Ensure Web Audio API
->>>>>>> Stashed changes
 });
 
 var crackleEnd3 = new Howl({
     src: ['./record_end_03.mp3'],
     rate: 1, 
-<<<<<<< Updated upstream
-    volume: 0.3,
-    loop: true
-=======
     volume: 0.4,
     loop: true,
     html5: false // Ensure Web Audio API
->>>>>>> Stashed changes
 });
 
 var endCrackle = null;
@@ -259,11 +216,7 @@ renderer.setPixelRatio(window.devicePixelRatio * 2);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-<<<<<<< Updated upstream
-renderer.toneMappingExposure = 1.15;
-=======
 renderer.toneMappingExposure = 1.4;
->>>>>>> Stashed changes
 document.body.appendChild(renderer.domElement);
 
 // Set up Scene
@@ -294,12 +247,18 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     const body = mesh.getObjectByName("body");
     platter = mesh.getObjectByName("platter");
     record = mesh.getObjectByName("vinyl");
+    recordInitialY = record.position.y;
     record.visible = false;
     recordLabel = mesh.getObjectByName("vinylLabel");
     speedDial = mesh.getObjectByName("dial");
     toneArm = mesh.getObjectByName("toneArm");
+    toneArmNeedle = mesh.getObjectByName("toneArmNeedle");
+    toneArmNeedle.position.set(0.001, 0.02, 0.245);
     yawBone = mesh.getObjectByName("boneYaw");
+    yawBone.add(toneArmNeedle);
+    armInitialY = yawBone.rotation.y;
     pitchBone = mesh.getObjectByName("bonePitch");
+    armInitialX = pitchBone.rotation.x;
     pitchClone = pitchBone.clone();
     pitchTarget.copy(pitchBone.quaternion);
     intMan.add(body);
@@ -312,6 +271,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     })
 
     toneArm.addEventListener('mousedown', (event) => {
+        if (isTransitioning) return;
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         yawTarget = yawBone.rotation.y;
@@ -343,6 +303,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
     });
 
     speedDial.addEventListener('mousedown', (event) => {
+        if (isTransitioning) return;
         isDragging = true;
         dragTarget = speedDial;
         controls.enableRotate = false;
@@ -376,74 +337,12 @@ loader.load('sleeve_01.glb', (gltf) => {
     });  
     
     const mesh = gltf.scene;
-    //scene.add(mesh);
     sleeve = mesh.getObjectByName("sleeve");
-<<<<<<< Updated upstream
-    //sleeve.position.set(0.359, 0, -0.011);
-    //sleeve.rotation.y = 0.5;
-=======
     sleeveHit = mesh.getObjectByName("sleeveHit");
     sleeveHit.castShadow = false;
     sleeveHit.receiveShadow = false;
     checkInitialLoadComplete(); // Check if we can proceed after sleeve loads
->>>>>>> Stashed changes
 });
-
-loader.load('groundPlane_01.glb', (gltf) => {
-    gltf.scene.traverse( function( child ) { 
-        if ( child.isMesh ) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-            child.frustumCulled = false;
-        }
-    });  
-    
-    groundPlane = gltf.scene;
-    const ground = groundPlane.getObjectByName("ground");
-    ground.material.dithering = true;
-    scene.add(groundPlane);
-});
-
-// Add lights
-const light = new THREE.DirectionalLight(0xC67385, 4.25)
-light.position.set(-1, 4, -1);
-light.castShadow = true;
-light.shadow.mapSize.width = 1024;
-light.shadow.mapSize.height = 1024;
-light.shadow.camera.near = 0.1;
-light.shadow.camera.far = 7;
-light.shadow.camera.left = -2;
-light.shadow.camera.right = 2;
-light.shadow.camera.top = 2;
-light.shadow.camera.bottom = -2;
-light.shadow.bias = -0.0005;
-light.shadow.radius = 2;
-light.shadow.blurSamples = 8;
-scene.add(light);
-
-const light2 = new THREE.DirectionalLight(0xFFFFF, 2.25)
-light2.position.set(1, 4, 1);
-light2.castShadow = true;
-light2.shadow.mapSize.width = 1024;
-light2.shadow.mapSize.height = 1024;
-light2.shadow.camera.near = 0.1;
-light2.shadow.camera.far = 7;
-light2.shadow.camera.left = -2;
-light2.shadow.camera.right = 2;
-light2.shadow.camera.top = 2;
-light2.shadow.camera.bottom = -2;
-light2.shadow.bias = -0.0005;
-light2.shadow.radius = 2;
-light2.shadow.blurSamples = 8;
-scene.add(light2);
-
-const light3 = new THREE.DirectionalLight(0xFFFFFF, 0.04)
-light3.position.set(2, 2, -2);
-light3.castShadow = false;
-scene.add(light3);
-
-//const shadowCameraHelper = new THREE.CameraHelper( light.shadow.camera );
-//scene.add( shadowCameraHelper );
 
 // Controls for the camera orbit
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -454,22 +353,6 @@ controls.enableRotate = true;
 controls.maxDistance = 1.1;
 controls.minDistance = 0.3;
 controls.maxPolarAngle = 1.2;
-<<<<<<< Updated upstream
-controls.target = new THREE.Vector3(0, 0.1, 0);
-controls.update();
-
-document.getElementById("loadTracksBtn").addEventListener('click', () => {
-    getFile();
-});
-
-document.getElementById("changeSceneBtn").addEventListener('click', () => {
-    if(!sceneChanged){
-        loadEnv01();
-        sceneChanged = true;
-    }
-});
-
-=======
 controls.minAzimuthAngle = -Math.PI / 4;
 controls.maxAzimuthAngle = Math.PI / 4;
 controls.target = new THREE.Vector3(0, 0.11, 0);
@@ -1122,7 +1005,6 @@ document.getElementById("cancelBuildBtn").addEventListener("click", () => {
     document.getElementById("recordBuildPanel").classList.add("hidden");
     setTimeout(resetBuilder, 300);
 });
->>>>>>> Stashed changes
 
 document.addEventListener('mousemove', (event) => {
     if(isDragging){        
@@ -1195,63 +1077,22 @@ document.addEventListener('mousemove', (event) => {
 const renderScene = new RenderPass( scene, camera );
 const bokehPass = new BokehPass( scene, camera, {
 focus: 1,
-aperture: 0.0085,
+aperture: 0.01,
 maxblur: 0.005
 });
+
+const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+bloomPass.threshold = 0.1;
+bloomPass.strength = 0.1;
+bloomPass.radius = 1;
 
 const outputPass = new OutputPass();
 const composer = new EffectComposer( renderer );
 composer.addPass( renderScene );
 composer.addPass( bokehPass );
+composer.addPass( bloomPass );
 composer.addPass( outputPass );
 
-<<<<<<< Updated upstream
-//Render loop
-function render(){    
-
-    if(meshLoaded){
-        const deltaTime = clock.getDelta();
-        //scene.environmentRotation.y += 0.005;
-        //console.log(scene.environmentRotation.y);
-        rpm = THREE.MathUtils.lerp(rpm, rpmTarget, 0.2);
-        rpmMulti = rpm / recordSpeed;
-        if(audioLoaded){
-            trackQueue[currentTrackIndex].rate(rpmMulti);
-            if(ambCrackle.playing()){
-                ambCrackle.rate(rpmMulti);
-            }
-            if(endCrackle.playing()){
-                endCrackle.rate(rpmMulti);
-            }
-
-        }        
-        angularVelocity = (rpm * 2 * Math.PI) / 60;
-
-        posInRecord = norm(yawBone.rotation.y, armStart, armEnd); 
-        pitchBone.quaternion.slerp(pitchTarget, 0.1);        
-        // Move the needle towards the start point if dropped close to the edge
-        if(yawBone.rotation.y > armStart && yawBone.rotation.y < armStart + 0.02 && !needleLifted){
-            yawBone.rotation.y += ((armSpeed * 25) * deltaTime) * rpmMulti;  
-        }
-        if(yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm){
-            yawBone.rotation.y += (armSpeed * deltaTime) * rpmMulti;     
-
-            if(trackQueue.length > 0 && !trackQueue[currentTrackIndex].playing() && !needleLifted && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded){
-                trackQueue[currentTrackIndex].play()
-            }
-        }
-        if(pitchBone.rotation.x > -1.575){
-            needleLifted = false;
-            
-        } else {
-            needleLifted = true;
-            recordEnded = false;
-        }
-        if(trackQueue.length > 0 && yawBone.rotation.y < armStart + 0.02 && !needleLifted && rpm > 1 && !recordEnded){
-            if(!ambCrackle.playing()){
-                ambCrackle.seek(Math.random() * ambCrackle.duration());
-                ambCrackle.play();
-=======
 window.addEventListener('resize', onWindowResize);
 
 function onWindowResize() {
@@ -1664,37 +1505,12 @@ function render() {
                 if (trackQueue && trackQueue.length > 0 && trackQueue[currentTrackIndex] && !trackQueue[currentTrackIndex].playing() && yawBone.rotation.y > armEnd + 0.0005 && !recordEnded && rpmMulti > 0.01) {
                     trackQueue[currentTrackIndex].play();
                 }
->>>>>>> Stashed changes
             }
-        } else {
-            ambCrackle.pause();
         }
 
-<<<<<<< Updated upstream
-        if(audioLoaded && yawBone.rotation.y < armEnd + 0.0005 && !needleLifted && !recordEnded){
-            if(!endCrackle.playing()){
-                recordEnded = true;
-                endCrackle.play();
-                ambCrackle.pause();
-            }
-        }
-        if(audioLoaded && needleLifted){
-            if(endCrackle.playing()){
-                endCrackle.pause();
-            }
-        }
-        if(yawBone.rotation.y < armEnd){
-            posInRecord = 1;
-        }
-        if(yawBone.rotation.y > armStart){
-            posInRecord = 0;
-        }
-        if(isDragging && dragTarget == toneArm){
-=======
         updateNonDeltaTone();
 
         if (isDragging && dragTarget == toneArm) {
->>>>>>> Stashed changes
             yawBone.rotation.y = THREE.MathUtils.lerp(yawBone.rotation.y, yawTarget, 0.075);
         }
         if (isDragging && dragTarget == speedDial) {
@@ -1735,190 +1551,6 @@ function render() {
         });
     }
 
-<<<<<<< Updated upstream
-    intMan.update();
-    controls.update();
-    requestAnimationFrame(render);    
-    if(postProcessEnabled){
-        composer.render();
-    } else {
-        renderer.render(scene, camera);
-    }
-    
-}
-
-function norm(value, min, max) {
-    return (value - min) / (max - min);
-}
-
-function onMouseUp(event) {
-    controls.enableRotate = true;
-    if(rpm > 1){
-        seekToPosition();
-    }   
-    isDragging = false;
-    dragTarget = null;
-
-    // Reset back to the original rotation smoothly
-    pitchTarget.copy(pitchClone.quaternion);
-    // Remove the global mouseup listener to prevent unnecessary calls
-    document.removeEventListener('mouseup', onMouseUp);
-}
-
-async function getFile() {
-    //audioLoaded = false;
-    const newRecord = new NewRecord();
-    newRecord.id = Date.now();
-    
-    try {
-        const fileHandles = await window.showOpenFilePicker(trackPickerOpts);
-        const files = await Promise.all(fileHandles.map(handle => handle.getFile()));
-
-        // Stop and unload any playing track
-        //if (trackQueue.length > 0 && trackQueue[currentTrackIndex]) {
-        //    trackQueue[currentTrackIndex].unload();
-        //}
-
-        // Reset track queue and duration tracking
-        //trackQueue = [];
-        //trackStartTimes = [];
-        totalDuration = 0;
-        //currentTrackIndex = 0;
-
-        let tempTrackList = [];
-        let albumArtSet = false;
-
-        // Add new sleeve
-        const newSleeve = sleeve.clone(true);
-        scene.add(newSleeve);
-        intMan.add(newSleeve);
-        newRecord.mesh = newSleeve;
-        if(envNum == 0){
-            newSleeve.position.set(env0X + getRandomArbitrary(-0.0015, 0.0015), env0Y, env0Z + (recordOffset * (albumCollection.length + 1)));
-            newSleeve.rotation.x = 1.294;
-        }
-
-        if(envNum == 1){
-            newSleeve.position.set(env1X, env1Y, env1Z + (recordOffset * (albumCollection.length + 1)));
-            newSleeve.rotation.x = 1.294;
-        }
-
-        newRecord.initialZ = newSleeve.position.z;
-        newRecord.targetPosition = newSleeve.position.clone();
-        newRecord.targetRotation = newSleeve.rotation.clone();
-
-        newSleeve.addEventListener('click', (event) =>{
-            showRecordInfo(newRecord);
-            document.getElementById('recordInfoPanel').classList.add('visible');
-            event.stopPropagation();
-        })
-        
-        for (const file of files) {
-            const fileURL = URL.createObjectURL(file);            
-            const metadata = await parseBlob(file);
-            let trackName
-
-            if(metadata.common.title){
-                trackName = metadata.common.title;
-            }
-
-            if (!albumArtSet) {
-                if (metadata.common.picture && metadata.common.picture.length > 0) {
-                    const albumArt = metadata.common.picture[0];
-                    if(albumArt != null){
-                        applyAlbumArtToRecord(albumArt, newSleeve, newRecord, false);
-                    }
-                    albumArtSet = true;
-                    //record.visible = true;
-                }
-                if(metadata.common.albumartist){
-                    newRecord.artist = metadata.common.albumartist;
-                }
-                
-                if(metadata.common.album){
-                    newRecord.name = metadata.common.album;
-                }
-            }
-
-            let newTrack = new Howl({
-                src: [fileURL],
-                format: [file.type.split('/')[1]],
-                onload: function () {  
-                    let duration = newTrack.duration();
-                    tempTrackList.push({ 
-                        fileName: file.name, 
-                        track: newTrack, 
-                        trackNames: trackName,
-                        duration: duration 
-                    });
-
-                    if (tempTrackList.length === files.length) {
-                        finalizeTrackQueue(tempTrackList, newRecord);
-                    }
-                },
-                onend: function () {
-                    if (!needleLifted && rpm > 1 && !isSeeking && currentTrackIndex < trackQueue.length - 1) {
-                        playNextTrack();
-                    }
-                }
-            });
-        }
-    } catch (error) {
-        console.error("Error loading files:", error);
-    }
-}
-
-function playNextTrack() {
-    currentTrackIndex++;
-    if (currentTrackIndex < trackQueue.length) {
-        //console.log(`Playing next track: ${currentTrackIndex + 1}/${trackQueue.length}`);
-        trackQueue[currentTrackIndex].play();
-    } else {
-        //console.log("Playlist finished.");
-        currentTrackIndex = trackQueue.length - 1; // Stay on the last track
-    }
-
-}
-
-function seekToPosition() {
-    if (!trackQueue.length) return; // No tracks loaded
-    isSeeking = true;
-
-    let globalTime = posInRecord * totalDuration; // Convert position into time
-    //console.log(`Seeking to time: ${globalTime} sec`);
-
-    // Find the correct track
-    let trackIndex = trackStartTimes.findIndex((startTime, i) => 
-        globalTime >= startTime && (i === trackStartTimes.length - 1 || globalTime < trackStartTimes[i + 1])
-    );
-
-    if (trackIndex !== -1) {
-        let trackTime = globalTime - trackStartTimes[trackIndex]; // Time within the track
-        //console.log(`Seeking in Track ${trackIndex + 1} at ${trackTime.toFixed(2)} sec`);
-
-        // Stop the old track and play the new one
-        if (trackQueue[currentTrackIndex]) {
-            trackQueue[currentTrackIndex].stop();
-        }
-
-        currentTrackIndex = trackIndex;
-        trackQueue[currentTrackIndex].seek(trackTime);
-
-        // Prevent `onend` from falsely firing after seek
-        clearTimeout(seekTimeout);
-        seekTimeout = setTimeout(() => { 
-            isSeeking = false;
-        }, 200); // Allow 0.2 seconds before allowing `onend` again
-    }
-}
-
-function applyAlbumArtToRecord(picture, albumSleeve, recordClass, changingRecord) {
-    if(changingRecord){
-        recordLabel.material = new THREE.MeshStandardMaterial({
-            map: recordClass.art, 
-            roughness: 0.16, 
-            metalness: 0.0
-=======
     updateIntMan();
     controls.update();
     if (mouseActive || rpm > 0.1) {
@@ -1987,12 +1619,9 @@ async function loadHowlsForRecord(recordObj) {
                     // Optionally try to recover or skip track
                 }
             });
->>>>>>> Stashed changes
         });
     }));
 
-<<<<<<< Updated upstream
-=======
     console.log(`Finished loading ${loadedTracks.length} Howls for: ${recordObj.name}`);
     recordObj.tracks = loadedTracks; // Assign loaded Howls back to the record object
     return loadedTracks;
@@ -2003,7 +1632,6 @@ async function loadRecordToDeck(recordObj) {
 
     if (!recordObj) { // Removed !recordObj.tracks check here, will load them below
         console.error("Attempted to load invalid record object:", recordObj);
->>>>>>> Stashed changes
         return;
     }
 
@@ -2016,87 +1644,6 @@ async function loadRecordToDeck(recordObj) {
     }
     // --- Howls are now guaranteed to be in recordObj.tracks ---
 
-<<<<<<< Updated upstream
-    // Load texture and apply to record material
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.load(imageUrl, (texture) => {
-
-        albumSleeve.material = new THREE.MeshStandardMaterial({
-            map: texture, 
-            roughness: 0.2, 
-            metalness: 0
-        });
-
-        recordClass.art = texture;
-        console.log(recordClass);
-        console.log("Album art applied to record texture!");
-    });
-
-}
-
-function finalizeTrackQueue(tempTrackList, recordClass) {
-    // Sort tracks by filename (natural order sorting for track numbers)
-    tempTrackList.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true }));
-    var tempStartTimes = [];
-    var tempTrackQueue = [];
-    var tempTrackNames = [];
-    
-    for (const trackObj of tempTrackList) {
-        let { track, trackNames, duration } = trackObj;
-        //const recordTracks = [];
-        //const recordStartTimes = [];
-        tempTrackQueue.push(track);
-        tempTrackNames.push(trackNames);
-        //trackQueue.push(track);
-        tempStartTimes.push(totalDuration);  
-        //trackStartTimes.push(totalDuration);  
-        totalDuration += duration;
-        recordClass.tracks = tempTrackQueue;
-        recordClass.trackNames = tempTrackNames;
-        recordClass.startTimes = tempStartTimes;
-        recordClass.duration = totalDuration;
-        //console.log(`Track: ${trackObj.fileName}, Duration: ${duration}`);
-    }
-
-    //console.log("Final Ordered Track Start Times:", trackStartTimes);
-    //console.log("Total playlist duration:", totalDuration);
-
-    recordDuration = totalDuration;
-    armSpeed = (armEnd - (armStart)) / recordDuration;
-    var getEndCrackle = Math.random();
-    if(getEndCrackle < 0.33){
-        endCrackle = crackleEnd1;
-    }
-    if(getEndCrackle > 0.33 && getEndCrackle < 0.66){
-        endCrackle = crackleEnd2;
-    }
-    if(getEndCrackle > 0.66){
-        endCrackle = crackleEnd3;
-    }
-    albumCollection.push(recordClass);
-    recordClass.mesh.addEventListener('mouseover', (event) =>{
-        document.body.style.cursor = 'pointer'
-        nudgeSleeves(albumCollection.indexOf(recordClass));
-        event.stopPropagation();
-    })
-
-    recordClass.mesh.addEventListener('mouseout', (event) =>{
-        document.body.style.cursor = 'default'
-        revertSleeves();
-        event.stopPropagation();
-    })
-}
-
-function changedSpeed(){
-    seekToPosition();
-}
-
-function loadRecordToDeck(recordObj) {
-    audioLoaded = false;
-    trackQueue = recordObj.tracks;
-    trackStartTimes = recordObj.startTimes;
-    totalDuration = recordObj.duration;
-=======
     console.log("Stopping current track if playing...");
     // Use the globally scoped trackQueue and currentTrackIndex
     if (trackQueue && Array.isArray(trackQueue) && currentTrackIndex >= 0 && currentTrackIndex < trackQueue.length && trackQueue[currentTrackIndex] && typeof trackQueue[currentTrackIndex].playing === 'function' && trackQueue[currentTrackIndex].playing()) {
@@ -2111,7 +1658,6 @@ function loadRecordToDeck(recordObj) {
     trackQueue = recordObj.tracks; // Assign the loaded Howls
     trackStartTimes = recordObj.startTimes || []; // Use pre-calculated start times from JSON
     totalDuration = recordObj.duration || 0; // Use pre-calculated total duration from JSON
->>>>>>> Stashed changes
     currentTrackIndex = 0;
     recordEnded = false;
     playbackStartTime = 0;
@@ -2159,26 +1705,6 @@ function loadRecordToDeck(recordObj) {
 
 
     record.visible = true;
-<<<<<<< Updated upstream
-    console.log("loaded record ", recordObj);
-}
-
-function loadEnv01(){
-
-    envNum = 1;
-
-    if(albumCollection.length > 0){
-        albumCollection.forEach((record) => {
-            record.mesh.position.x = env1X;
-            record.targetPosition.x = env1X;
-            
-            record.mesh.position.y = env1Y;
-            record.targetPosition.y = env1Y;
-
-            record.mesh.position.z = env1Z + (recordOffset * (albumCollection.indexOf(record) + 1));
-            record.targetPosition.z = env1Z + (recordOffset * (albumCollection.indexOf(record) + 1));
-            record.initialZ = record.mesh.position.z;
-=======
     console.log("Record mesh set to visible.");
 
     audioLoaded = true; // Mark audio as ready
@@ -2472,89 +1998,14 @@ function replaceRecords(){
             record.recordHit.rotation.x = 1.294;
             record.targetRotation.setFromEuler(new THREE.Euler(1.294, 0, 0)); // Update target quaternion
 
->>>>>>> Stashed changes
         });
         revertSleeves(true); // Snap sleeves to their target positions immediately
         console.log("--- replaceRecords finished ---");
     } else {
          console.log("No records in collection to position.");
     }
-
-<<<<<<< Updated upstream
-    
-    scene.remove(light);
-    scene.remove(light2);
-    scene.remove(light3);
-
-    // Adjust environment and tone mapping
-    renderer.toneMappingExposure = 1.75;
-    scene.environmentIntensity = 0.75;
-    scene.environmentRotation.y = 11.4;
-
-    // Adjust lights
-    const sc1Light = new THREE.DirectionalLight(0xede2b4, 11)
-    sc1Light.position.set(5.6, 1.5, 6.3);
-    sc1Light.castShadow = true;
-    sc1Light.shadow.mapSize.width = 2048;
-    sc1Light.shadow.mapSize.height = 2048;
-    sc1Light.shadow.camera.near = 4;
-    sc1Light.shadow.camera.far = 10;
-    sc1Light.shadow.camera.left = -1.2;
-    sc1Light.shadow.camera.right = 1.5;
-    sc1Light.shadow.camera.top = 1;
-    sc1Light.shadow.camera.bottom = -1;
-    sc1Light.shadow.bias = -0.002;
-    sc1Light.shadow.radius = 2;
-    sc1Light.shadow.blurSamples = 32;
-
-    const sc2Light = new THREE.DirectionalLight(0xb4c6d3, 0.05)
-    sc2Light.position.set(1, 0.8, -1);
-    sc2Light.castShadow = false;
-    
-    const sc3Light = new THREE.DirectionalLight(0xFFFFFF, 0.5)
-    sc3Light.position.set(0, 0.7, 0);
-    sc3Light.castShadow = true;
-    sc3Light.shadow.mapSize.width = 1024;
-    sc3Light.shadow.mapSize.height = 1024;
-    sc3Light.shadow.camera.near = 0.5;
-    sc3Light.shadow.camera.far = 1.4;
-    sc3Light.shadow.camera.left = -0.5;
-    sc3Light.shadow.camera.right = 1;
-    sc3Light.shadow.camera.top = 0.3;
-    sc3Light.shadow.camera.bottom = -0.3;
-    sc3Light.shadow.bias = -0.0001;
-    sc3Light.shadow.radius = 3;
-    sc3Light.shadow.blurSamples = 16;
-    sc3Light.shadow.intensity = 1.6;
-
-    scene.add(sc1Light);
-    scene.add(sc2Light);
-    scene.add(sc3Light);
-
-    //const shadowCameraHelper = new THREE.CameraHelper( sc3Light.shadow.camera );
-    //scene.add( shadowCameraHelper );
-
-    // Change environment    
-    loader.load('env_01.glb', (gltf) => {
-        gltf.scene.traverse( function( child ) { 
-            if ( child.isMesh ) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                child.frustumCulled = false;
-            }
-        });  
-        
-        const mesh = gltf.scene;
-        scene.add(mesh);
-    });
-
-    scene.remove(groundPlane);
-
-    controls.maxPolarAngle = 1.4;
 }
 
-function nudgeSleeves(currentSleeve){
-=======
 function changeScene(newSceneNum){
     if (!environment) return;
     console.log(`--- User/Load triggered changeScene to ${newSceneNum} ---`);
@@ -2579,53 +2030,31 @@ function nudgeSleeves(currentSleeve){
     mouseActiveTimeout = setTimeout(() => {
         mouseActive = false;
     }, powerDownDelay);
->>>>>>> Stashed changes
     animateLibrary = true;
-    console.log(currentSleeve);
     albumCollection.forEach((record) => {
         if(albumCollection.indexOf(record) > currentSleeve){
             record.targetRotation.x = 1.6;
         }
         if(albumCollection.indexOf(record) == currentSleeve){
             if(currentSleeve < albumCollection.length - 1){
-                if(envNum == 0){
-                    record.targetPosition.y = 0.125;
-                }
-                if(envNum == 1){
-                    record.targetPosition.y = -0.075;
-                }
+                
+                record.targetPosition.y = environment.recordY + 0.05;
                 if(currentSleeve > 0){
-                    console.log("Moving Forward");
-                    record.targetPosition.z = record.initialZ - 0.025;
-                } else {
-                    record.targetPosition.z = record.initialZ - 0.025;
-                    console.log("Moving Backward");
+                    record.targetPosition.z = record.initialZ - 0.001;
                 }
-
             }
-
             record.targetRotation.x = 1.45;
-            if(envNum == 0){
-                record.targetPosition.y = 0.125;
-            }
-            if(envNum == 1){
-                record.targetPosition.y = -0.075;
-            }
-            
+            record.targetPosition.y = environment.recordY + 0.05;
         }
     });
 };
 
-<<<<<<< Updated upstream
-function revertSleeves(){
-=======
 function revertSleeves(immediate = false){
     mouseActive = true;
     clearTimeout(mouseActiveTimeout);
     mouseActiveTimeout = setTimeout(() => {
         mouseActive = false;
     }, powerDownDelay);
->>>>>>> Stashed changes
     albumCollection.forEach((record) => {
         if (immediate) {
             record.mesh.rotation.x = 1.294;
@@ -2633,12 +2062,7 @@ function revertSleeves(immediate = false){
             record.mesh.position.z = record.initialZ;
         }
         record.targetRotation.x = 1.294;
-        if(envNum == 0){
-            record.targetPosition.y = 0.0541;
-        }
-        if(envNum == 1){
-            record.targetPosition.y = -0.153;
-        }
+        record.targetPosition.y = environment.recordY;
         record.targetPosition.z = record.initialZ;
     });
     if (immediate) {
@@ -2646,8 +2070,6 @@ function revertSleeves(immediate = false){
     }
 };
 
-<<<<<<< Updated upstream
-=======
 function setBuilderButtonStates(enabled) {
 	document.getElementById("loadTracksToBuilderBtn").disabled = false;
 	document.getElementById("cancelBuildBtn").disabled = false;
@@ -2657,14 +2079,11 @@ function setBuilderButtonStates(enabled) {
 	document.getElementById("uploadArtBtn").disabled = !enabled;
 }
 
->>>>>>> Stashed changes
 function showRecordInfo(recordObj) {
     const panel = document.getElementById('recordInfoPanel');
     panel.classList.remove('hidden');
     document.getElementById('albumTitle').innerText = recordObj.name || "Unknown Album";
     document.getElementById('artistName').innerText = recordObj.artist || "Unknown Artist";
-<<<<<<< Updated upstream
-=======
     document.getElementById("editRecordBtn").onclick = async () => { // Make async
         // --- Load Howls before opening editor if needed ---
         await loadHowlsForRecord(recordObj);
@@ -2673,7 +2092,6 @@ function showRecordInfo(recordObj) {
         openBuilderForEditing(recordObj); // Now Howls are guaranteed to be loaded
         panel.classList.remove('visible');
     };
->>>>>>> Stashed changes
     
     const trackList = document.getElementById('trackList');
     trackList.innerHTML = '';
@@ -2730,11 +2148,6 @@ function showRecordInfo(recordObj) {
         );
     }
 
-<<<<<<< Updated upstream
-    document.getElementById('loadToPlayerBtn').onclick = () => {
-        loadRecordToDeck(recordObj);
-        //document.getElementById('recordInfoPanel').classList.add('hidden');
-=======
     const loadBtn = document.getElementById('loadToPlayerBtn');
     const isAlreadyLoaded = currentRecordLoaded && recordObj.id === currentRecordLoaded.id;
     loadBtn.disabled = isAlreadyLoaded;
@@ -2751,7 +2164,6 @@ function showRecordInfo(recordObj) {
         } else {
             await loadRecordToDeckAnim(recordObj); // Await if needed elsewhere
         }
->>>>>>> Stashed changes
     };
 
     document.getElementById('closePanelBtn').onclick = () => {
@@ -2761,8 +2173,6 @@ function showRecordInfo(recordObj) {
      panel.classList.add('visible');
 }
 
-<<<<<<< Updated upstream
-=======
 async function openBuilderForEditing(recordObj) { // Make async
     document.getElementById('recordInfoPanel').classList.remove('visible');
     document.getElementById("recordBuildPanel").classList.remove("hidden");
@@ -2920,13 +2330,10 @@ function recalculateStartTimes() {
     recordBuilder.duration = runningTotal;
 }
 
->>>>>>> Stashed changes
 function getRandomArbitrary(min, max) {
     return Math.random() * (max - min) + min;
 }
 
-<<<<<<< Updated upstream
-=======
 function fpsLimiter(fps, callback){
     const interval = 1000 / fps;
 	let lastTime = 0;
@@ -3034,5 +2441,4 @@ function isPointerOverBlockingPanel() {
 	});
 }
 
->>>>>>> Stashed changes
 render();
