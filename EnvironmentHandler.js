@@ -2,26 +2,39 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 let mesh = null;
-var env1X = 0.45;
+var env1X = 0.3;
 var env1Y = 0.0541;
 var env1Z = -0.13;
 
-var env2X = 0.438;
+var env2X = 0.288;
 var env2Y = -0.153;
 var env2Z = -0.195;
 
 class Environment {
     
-    constructor(threeScene, background, lights, recordX, recordY, recordZ){
-        this.threeScene = threeScene;
-        this.background = background;
-        this.lights = lights;
-        this.recordX = recordX;
-        this.recordY = recordY;
-        this.recordZ = recordZ;
+    constructor(threeScene, background, lights, 
+        recordX, recordY, recordZ, 
+        camPosDefault, camTargetDefault, camPosNeedle, 
+        camPosRecord, camTargetRecord, camPosSleeves, camTargetSleeves,
+        recordBlocker) {
+
+            this.threeScene = threeScene;
+            this.background = background;
+            this.lights = lights;
+            this.recordX = recordX;
+            this.recordY = recordY;
+            this.recordZ = recordZ;
+            this.camPosDefault = camPosDefault;
+            this.camTargetDefault = camTargetDefault;
+            this.camPosNeedle = camPosNeedle;
+            this.camPosRecord = camPosRecord;
+            this.camTargetRecord = camTargetRecord;
+            this.camPosSleeves = camPosSleeves;
+            this.camTargetSleeves = camTargetSleeves;
+            this.recordBlocker = recordBlocker;
     }    
 
-    changeScene(){
+    changeScene(intManager, moveCamCallback){
         this.clearScene();
 
         const loader = new GLTFLoader().setPath('./');
@@ -37,9 +50,37 @@ class Environment {
                 });  
                 
                 mesh = gltf.scene;
+                mesh.position.set(-0.15, 0, 0);
                 const ground = mesh.getObjectByName("ground");
                 ground.material.dithering = true;
+                const albumBlock = mesh.getObjectByName("albumBlock");
+                albumBlock.castShadow = false;
+                albumBlock.receiveShadow = false;
+                const camPosDefault = mesh.getObjectByName("camPosDefault");
+                const camTargetDefault = mesh.getObjectByName("camTargetDefault");
+                const camPosNeedle = mesh.getObjectByName("camPosNeedle");
+                const camPosRecord = mesh.getObjectByName("camPosRecord");
+                const camTargetRecord = mesh.getObjectByName("camTargetRecord");
+                const camPosSleeves = mesh.getObjectByName("camPosSleeves");
+                const camTargetSleeves = mesh.getObjectByName("camTargetSleeves");
+                this.camPosDefault = camPosDefault;
+                this.camTargetDefault = camTargetDefault;
+                this.camPosNeedle = camPosNeedle;
+                this.camPosRecord = camPosRecord;
+                this.camTargetRecord = camTargetRecord;
+                this.camPosSleeves = camPosSleeves;
+                this.camTargetSleeves = camTargetSleeves;
+                this.recordBlocker = albumBlock;
                 this.threeScene.add(mesh);
+
+                intManager.add(albumBlock);
+                albumBlock.addEventListener("mouseover", (event) =>{
+                    event.stopPropagation();
+                })
+
+                if (typeof moveCamCallback === 'function' && this.camPosDefault && this.camTargetDefault) {
+                    moveCamCallback(this.camPosDefault, this.camTargetDefault, true);
+                }
             });
 
             this.recordX = env1X;
@@ -58,7 +99,35 @@ class Environment {
                 });  
                 
                 mesh = gltf.scene;
+                mesh.position.set(-0.15, 0, 0);
+                const albumBlock = mesh.getObjectByName("albumBlock");
+                albumBlock.castShadow = false;
+                albumBlock.receiveShadow = false;
+                const camPosDefault = mesh.getObjectByName("camPosDefault");
+                const camTargetDefault = mesh.getObjectByName("camTargetDefault");
+                const camPosNeedle = mesh.getObjectByName("camPosNeedle");
+                const camPosRecord = mesh.getObjectByName("camPosRecord");
+                const camTargetRecord = mesh.getObjectByName("camTargetRecord");
+                const camPosSleeves = mesh.getObjectByName("camPosSleeves");
+                const camTargetSleeves = mesh.getObjectByName("camTargetSleeves");
+                this.camPosDefault = camPosDefault;
+                this.camTargetDefault = camTargetDefault;
+                this.camPosNeedle = camPosNeedle;
+                this.camPosRecord = camPosRecord;
+                this.camTargetRecord = camTargetRecord;
+                this.camPosSleeves = camPosSleeves;
+                this.camTargetSleeves = camTargetSleeves;
+                this.recordBlocker = albumBlock;
                 this.threeScene.add(mesh);
+
+                intManager.add(albumBlock);
+                albumBlock.addEventListener("mouseover", (event) =>{
+                    event.stopPropagation();
+                })
+
+                if (typeof moveCamCallback === 'function' && this.camPosDefault && this.camTargetDefault) {
+                    moveCamCallback(this.camPosDefault, this.camTargetDefault, true);
+                }
             });
 
             this.recordX = env2X;
@@ -151,14 +220,18 @@ class Environment {
             scene1Light3.position.set(2, 2, -2);
             scene1Light3.castShadow = false;
 
-            const sceneLights = [scene1Light1, scene1Light2, scene1Light3];
+            const scene1Light4 = new THREE.DirectionalLight(0xede2b4, 3.5)
+            scene1Light4.position.set(5.6, 1.7, 6.3);
+            scene1Light4.castShadow = false;
+
+            const sceneLights = [scene1Light1, scene1Light2, scene1Light3, scene1Light4];
             return sceneLights;
         }
 
         if(scene === 2){
             // Scene 2 (living room)
             const scene2Light1 = new THREE.DirectionalLight(0xede2b4, 11)
-            scene2Light1.position.set(5.6, 1.5, 6.3);
+            scene2Light1.position.set(5.6, 1.7, 6.3);
             scene2Light1.castShadow = true;
             scene2Light1.shadow.mapSize.width = 2048;
             scene2Light1.shadow.mapSize.height = 2048;
@@ -177,7 +250,7 @@ class Environment {
             scene2Light2.castShadow = false;
 
             const scene2Light3 = new THREE.DirectionalLight(0xFFFFFF, 0.5)
-            scene2Light3.position.set(0, 0.7, 0);
+            scene2Light3.position.set(0, 0.7, -0.1);
             scene2Light3.castShadow = true;
             scene2Light3.shadow.mapSize.width = 1024;
             scene2Light3.shadow.mapSize.height = 1024;
@@ -190,7 +263,7 @@ class Environment {
             scene2Light3.shadow.bias = -0.0001;
             scene2Light3.shadow.radius = 3;
             scene2Light3.shadow.blurSamples = 16;
-            scene2Light3.shadow.intensity = 1.6;
+            scene2Light3.shadow.intensity = 1;
 
             const sceneLights = [scene2Light1, scene2Light2, scene2Light3];
             return sceneLights;

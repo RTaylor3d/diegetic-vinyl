@@ -12,6 +12,7 @@
 				font-family: "Outfit", sans-serif;
 				font-weight: 200;
 				overflow: hidden; /* Prevent scrollbars */
+				position: relative; /* Needed for absolute positioning of children */
 			}
 
 			h1 {
@@ -32,10 +33,10 @@
 				padding: 12px 20px;
 				font-family: "Outfit", sans-serif;
 				font-optical-sizing: auto;
-				font-weight: 700;
+				font-weight: 400;
 				font-size: 16px;
-				background-color: #F1C45A;
-				color: #333333;
+				background-color: #333333;
+				color: #f5f5f5;
 				border: none;
 				cursor: pointer;
 				border-radius: 8px;
@@ -44,10 +45,60 @@
 			}
 
 			.ui-button:hover {
-				background-color: #FAEAC5;
+				background-color: #444444;
 			}
 
 			.ui-button:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+				pointer-events: none;
+			}
+
+			.ui-button-light {
+				padding: 12px 20px;
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 400;
+				font-size: 16px;
+				background-color: #f5f5f5;
+				color: #333333;
+				border: none;
+				cursor: pointer;
+				border-radius: 8px;
+				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+				transition: background-color 0.2s ease;
+			}
+
+			.ui-button-light:hover {
+				background-color: #ffffff;
+			}
+
+			.ui-button-light:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+				pointer-events: none;
+			}
+
+			.ui-button-exit {
+				padding: 12px 20px;
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 700;
+				font-size: 16px;
+				background-color: #f16c5a;
+				color: #333333;
+				border: none;
+				cursor: pointer;
+				border-radius: 8px;
+				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+				transition: background-color 0.2s ease;
+			}
+
+			.ui-button-exit:hover {
+				background-color: #faddc5;
+			}
+
+			.ui-button-exit:disabled {
 				opacity: 0.5;
 				cursor: not-allowed;
 				pointer-events: none;
@@ -99,7 +150,7 @@
 			}
 
 			.dark-grey-button:hover {
-				background-color: #F1C45A; /* Solid yellow hover state */
+				background-color: #444444; /* Solid yellow hover state */
 				border: none; /* Remove stroke on hover */
 			}
 
@@ -299,7 +350,7 @@
 				overflow: hidden;
 				z-index: 10;
 				backdrop-filter: blur(8px);
-				background-color: rgba(0, 0, 0, 0.4); /* darker base for contrast */
+				background-color: rgba(255, 255, 255, 0.5);
 				box-shadow: 0 0 5px rgba(0, 0, 0, 0.25);
 			}
 
@@ -455,22 +506,32 @@
 				top: 50%;
 				left: 50%;
 				transform: translate(-50%, -50%);
-				width: 600px;
-				max-height: 80vh;
+				width: 1024px; /* Or desired width */
+				max-height: 80vh; /* Limit overall panel height */
 				padding: 20px;
 				background-color: rgba(255, 255, 255, 0.85);
 				color: #222;
 				border-radius: 12px;
 				backdrop-filter: blur(6px);
 				box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-				display: flex;
-				flex-direction: column;
-				gap: 20px;
-				overflow-y: auto;
+				display: flex; /* Use flexbox */
+				flex-direction: column; /* Stack children vertically */
+				/* gap: 20px; Removed gap, manage spacing internally */
+				overflow: hidden; /* Prevent panel itself from scrolling */
 				opacity: 0;
 				pointer-events: none;
 				transition: opacity 0.25s ease;
 				z-index: 100;
+			}
+
+			#libraryPanel h1 {
+				margin-bottom: 15px; /* Space below title */
+				flex-shrink: 0; /* Prevent header from shrinking */
+			}
+
+			#sortControls {
+				margin-bottom: 15px; /* Space below sort controls */
+				flex-shrink: 0; /* Prevent header from shrinking */
 			}
 
 			#libraryPanel.visible {
@@ -482,30 +543,121 @@
 				list-style: none;
 				padding: 0;
 				margin: 0;
-				display: flex;
-				flex-direction: column;
-				gap: 10px;
+				display: grid;
+				grid-template-columns: repeat(5, 1fr); /* Set exactly 5 columns */
+				grid-auto-rows: min-content; /* Size rows based on content */
+				gap: 20px; /* Increased gap */
+				overflow-y: auto; /* Enable vertical scrolling */
+				overflow-x: hidden; /* Disable horizontal scrolling */
+				flex-grow: 1; /* Allow list to take available space */
+				padding-right: 10px; /* Add padding for scrollbar */
+				padding-bottom: 10px; /* Add some padding at the bottom */
+				align-items: start; /* Align items to the start of their grid cell vertically */
 			}
 
+			/* --- Custom Scrollbar Styles --- */
+			#libraryList::-webkit-scrollbar {
+				width: 8px; /* Width of the scrollbar */
+			}
+
+			#libraryList::-webkit-scrollbar-track {
+				background: rgba(0, 0, 0, 0); /* Track color */
+				border-radius: 4px;
+			}
+
+			#libraryList::-webkit-scrollbar-thumb {
+				background-color: rgba(70, 70, 70, 0.3); /* Thumb color */
+				border-radius: 4px;
+				border: 2px solid transparent; /* Creates padding around thumb */
+				background-clip: content-box;
+			}
+
+			#libraryList::-webkit-scrollbar-thumb:hover {
+				background-color: rgba(70, 70, 70, 0.5); /* Thumb color on hover */
+			}
+			/* --- End Custom Scrollbar Styles --- */
+
+			/* --- Adjust Styles for Library Items --- */
 			.library-item {
+				display: flex;
+				flex-direction: column; /* Stack image and info vertically */
+				align-items: center; /* Center items horizontally */
+				text-align: center;
+				cursor: pointer;
+				transition: background-color 0.2s ease, scale 0.2s ease;
+				min-height: 0;
+				/* Ensure the item itself doesn't overflow */
+				overflow: hidden;
+				/* Add padding for hover effect */
+				padding: 5px;
+				border-radius: 4px;
+			}
+
+			.library-item:hover {
+				background-color: rgba(255, 255, 255, 0.1); /* Subtle hover background */
+				scale: 1.05; /* Slightly scale up on hover */
+			}
+
+			.library-item.selected {
+				/* Remove background and outline from the item itself */
+				background-color: transparent;
+				outline: none;
+			}
+
+			.library-item.selected img {
+				/* Apply outline directly to the image when selected */
+				outline: 3px solid #E6AB0F; /* Yellow stroke */
+				outline-offset: -3px; /* Place outline inside the image bounds */
+				border-radius: 6px; /* Ensure outline follows image rounding */
+			}
+
+			.library-item img {
+				width: 100%; /* Make image fill the tile width */
+				height: auto; /* Height determined by aspect ratio */
+				aspect-ratio: 1 / 1; /* Keep it square */
+				object-fit: cover; /* Cover the area, cropping if needed */
+				margin-bottom: 8px; /* Space between image and text */
+				display: block; /* Remove potential extra space below image */
+				border-radius: 6px; /* Apply rounded corners directly to the image */
+				/* Add transition for outline */
+				transition: outline 0.1s ease-in-out;
+			}
+
+			.library-item-title {
+				font-weight: 600; /* Bold */
+				font-size: 1em;
+				margin-bottom: 2px; /* Small space between title and artist */
+			}
+
+			.library-item-info {
+				display: flex;
+				flex-direction: column;
+				width: 100%; /* Take full width for text alignment */
+				padding: 0 5px 5px 5px; /* Padding for text */
+				height: 44px; /* Set fixed height */
+				justify-content: flex-start; /* Align text to top */
+				box-sizing: border-box; /* Ensure padding is included in height */
+				overflow: hidden; /* Hide any text that overflows the fixed height */
+			}
+
+			.library-item-title,
+			.library-item-artist {
+				white-space: nowrap; /* Prevent text wrapping */
+				overflow: hidden; /* Hide overflow */
+				text-overflow: ellipsis; /* Add ellipsis for overflow */
+				width: 100%; /* Ensure text takes full width for ellipsis */
+			}
+
+			/* --- End Library Item Styles --- */
+
+			.library-footer {
 				display: flex;
 				justify-content: space-between;
 				align-items: center;
-				padding: 10px;
-				background: #f9f9f9;
-				border-radius: 6px;
-				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-			}
-
-			.library-item button {
-				margin-left: 10px;
-			}
-
-			.sort-controls {
-				display: flex;
-				gap: 10px;
-				margin-bottom: 10px;
-				align-items: center;
+				margin-top: 15px;
+				padding-top: 15px;
+				border-top: 1px solid #ddd;
+				flex-shrink: 0; /* Prevent footer from shrinking */
 			}
 
 			.overlay {
@@ -518,16 +670,71 @@
 				opacity: 0;
 				pointer-events: none;
 				transition: opacity 0.25s ease;
-				z-index: 199; /* Ensure it appears below the settings panel but above other elements */
+				z-index: 198; /* Ensure it appears below the settings panel but above other elements */
 			}
 
 			.overlay.visible {
 				opacity: 1;
 				pointer-events: auto;
 			}
+
+			body.is-electron #fetchMetadataBtn {
+				display: none; /* Hide fetch button in Electron */
+			}
+
+			#draggable-top-bar {
+				position: absolute;
+				top: 0;
+				left: 100px;
+				width: 100%;
+				height: 5vh; /* 10% of viewport height */
+				-webkit-app-region: drag; /* Make this region draggable */
+				z-index: 1; /* Ensure it's below buttons */
+			}
+
+			#buildRecordBtnContainer,
+			#libraryBtnContainer,
+			#changeSceneBtnContainer,
+			#settingsBtnContainer {
+				position: absolute;
+				z-index: 199; /* Higher z-index than draggable bar */
+			}
+
+			#settingsBtnContainer {
+				top: 10px;
+				left: 10px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
+
+			#buildRecordBtnContainer {
+				bottom: 30px;
+				left: 10px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
+
+			#libraryBtnContainer {
+				bottom: 30px;
+				left: 75px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
+
+			#changeSceneBtnContainer {
+				bottom: 30px;
+				right: 10px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
 		</style>
 	</head>
 	<body>
+		<div id="draggable-top-bar"></div>
 		<div id="recordBuildPanel" class="hidden">
 			<div class="record-build-header">
 			  <div class="record-build-info">
@@ -557,9 +764,9 @@
 			<h2 id="artistName">Artist</h2>
 			<ul id="trackList"></ul>
 			<div id="buttonRow">
-				<button id="loadToPlayerBtn" class="ui-button">Load to player</button>
-				<button id="editRecordBtn" class="ui-button">Edit</button>
-				<button id="closePanelBtn" class="ui-button">Close</button>
+				<button id="loadToPlayerBtn" class="ui-button-light">Load to player</button>
+				<button id="editRecordBtn" class="ui-button-light">Edit</button>
+				<button id="closePanelBtn" class="ui-button-light">Close</button>
 			</div>
 		  </div>
 		
@@ -572,7 +779,7 @@
 		<div id="changeSceneBtnContainer" style="bottom: 30px; right: 30px; position: absolute; width: 50px; height: 50px; overflow: visible;">
 			<canvas id="changeSceneBtnCanvas" width="80" height="80"></canvas>
 		</div>
-		<div id="settingsBtnContainer" style="top: 0px; left: 0px; position: absolute; width: 50px; height: 50px; overflow: visible;">
+		<div id="settingsBtnContainer" style="top: 0px; left: 0px; position: absolute; width: 50px; height: 50px; overflow: visible; z-index: 199;">
 			<canvas id="settingsBtnCanvas" width="80" height="80"></canvas>
 		</div>
 
@@ -596,27 +803,34 @@
 					<input type="range" id="crackleVolumeSlider" min="0" max="1" step="0.01" />
 				</label>
 			</div>
-			<button id="closeSettingsBtn" class="ui-button">Close</button>
+			<button id="closeSettingsBtn" class="ui-button">Close panel</button>
+			<button id="exitAppBtn" class="ui-button-exit">Exit app</button>
 		</div>
 
 		<div id="libraryPanel" class="hidden">
 			<h1>Library</h1>
 			<div id="sortControls" class="sort-controls">
 				<label>
-					<input type="radio" name="sortBy" value="artist" checked />
-					Artist
+					<input type="radio" name="sortBy" value="artist" id="sortByArtist" checked /> Artist
 				</label>
 				<label>
-					<input type="radio" name="sortBy" value="album" />
-					Album
+					<input type="radio" name="sortBy" value="album" id="sortByAlbum" /> Album
 				</label>
 				<label>
-					<input type="checkbox" id="sortOrderToggle" />
-					Descending
+					<input type="checkbox" id="sortOrderToggle" /> Descending
 				</label>
 			</div>
-			<ul id="libraryList"></ul>
-			<button id="closeLibraryBtn" class="ui-button">Close</button>
+			<ul id="libraryList">
+				<!-- Library items will be populated here -->
+			</ul>
+			<div class="library-footer">
+				<div id="libraryActions">
+					<button id="libraryLoadBtn" class="ui-button" disabled>Load</button>
+					<button id="libraryEditBtn" class="ui-button" disabled>Edit</button>
+					<button id="libraryDeleteBtn" class="ui-button" disabled>Delete</button>
+				</div>
+				<button id="closeLibraryBtn" class="ui-button">Close</button>
+			</div>
 		</div>
 
 		<div id="overlay" class="overlay"></div>

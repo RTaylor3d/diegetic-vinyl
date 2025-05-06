@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Turntable - Base Scene</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Domine:wght@400..700&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+		<style>
+			body {
+				margin: 0;
+				font-family: "Outfit", sans-serif;
+				font-weight: 200;
+				overflow: hidden; /* Prevent scrollbars */
+			}
+
+			h1 {
+				font-family: "Domine", serif;
+				font-weight: 700; /* Bold for main titles */
+				font-size: 32px;
+				margin: 0px 0px 0px 0px;
+			}
+
+			h2 {
+				font-family: "Domine", serif;
+				font-weight: 400; /* Medium for subtitles */
+				font-size: 24px;
+				margin: 0px 0px 0px 0px;
+			}
+			
+			.ui-button {
+				padding: 12px 20px;
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 400;
+				font-size: 16px;
+				background-color: #333333;
+				color: #f5f5f5;
+				border: none;
+				cursor: pointer;
+				border-radius: 8px;
+				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+				transition: background-color 0.2s ease;
+			}
+
+			.ui-button:hover {
+				background-color: #444444;
+			}
+
+			.ui-button:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+				pointer-events: none;
+			}
+
+			.ui-button-light {
+				padding: 12px 20px;
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 400;
+				font-size: 16px;
+				background-color: #f5f5f5;
+				color: #333333;
+				border: none;
+				cursor: pointer;
+				border-radius: 8px;
+				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+				transition: background-color 0.2s ease;
+			}
+
+			.ui-button-light:hover {
+				background-color: #ffffff;
+			}
+
+			.ui-button-light:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+				pointer-events: none;
+			}
+
+			.ui-button-exit {
+				padding: 12px 20px;
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 700;
+				font-size: 16px;
+				background-color: #f16c5a;
+				color: #333333;
+				border: none;
+				cursor: pointer;
+				border-radius: 8px;
+				box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+				transition: background-color 0.2s ease;
+			}
+
+			.ui-button-exit:hover {
+				background-color: #faddc5;
+			}
+
+			.ui-button-exit:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+				pointer-events: none;
+			}
+
+			.icon-button {
+				width: 50px;
+				height: 50px;
+				border-radius: 8px;
+				background: none;
+				border: none;
+				cursor: pointer;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				transition: background-color 0.2s ease;
+			}
+
+			.icon-button img {
+				transition: opacity 0.2s ease;
+			}
+
+			.icon-button:hover img.normal {
+				opacity: 0;
+			}
+
+			.icon-button:hover img.hover {
+				opacity: 1;
+			}
+
+			.icon-button img.hover {
+				position: absolute;
+				opacity: 0;
+			}
+			
+			.dark-grey-button {
+				width: 48px;
+				height: 48px;
+				border-radius: 8px;
+				background: radial-gradient(circle at center, #333333, #222222);
+				border: 2px solid;
+				border-image: linear-gradient(to bottom, #d3d3d3, #888888) 1;
+				overflow: hidden; /* Ensures the border respects the rounded corners */
+				cursor: pointer;
+				transition: background-color 0.2s ease, background 0.2s ease;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+
+			.dark-grey-button:hover {
+				background-color: #444444; /* Solid yellow hover state */
+				border: none; /* Remove stroke on hover */
+			}
+
+			.dark-grey-button img {
+				width: 24px;
+				height: 24px;
+				object-fit: contain;
+				transition: opacity 0.2s ease;
+			}
+
+			.dark-grey-button:hover img {
+				opacity: 0;
+			}
+			
+			#buildRecordBtn {
+				bottom: 20px;
+				left: 20px;
+			}
+
+			#changeSceneBtn {
+				bottom: 20px;
+				right: 20px;
+			}
+
+			#buildRecordBtn,
+			#changeSceneBtn {
+				position: absolute;
+			}
+
+			#recordBuildPanel {
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: 750px;
+				max-height: 80vh;
+				padding: 20px;
+				transition:
+					opacity 0.25s ease;
+				background-color: rgba(255, 255, 255, 0.85);
+				color: #222;
+				border-radius: 12px;
+				backdrop-filter: blur(6px);
+				box-shadow: 0 0 10px rgba(0,0,0,0.3);
+				display: flex;
+				flex-direction: column;
+				gap: 20px;
+				overflow-y: auto;
+				z-index: 100;
+			}
+
+			#recordBuildPanel.visible {
+				opacity: 1;
+			}
+
+			#recordBuildPanel.hidden {
+				opacity: 0;
+				pointer-events: none;
+			}
+
+			.record-build-header {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: space-between;
+				align-items: flex-start;
+				gap: 20px;
+			}
+
+			#builderTitle {
+				font-family: "Domine", serif;
+				font-size: 32px;
+				font-weight: 700;
+				background: transparent;
+				border: none;
+			}
+
+			#builderArtist {
+				font-family: "Domine", serif;
+				font-size: 24px;
+				font-weight: 400;
+				background: transparent;
+				border: none;
+			}
+
+			.record-build-info input {
+				font-family: "Outfit", sans-serif;
+				font-size: 18px;
+				font-weight: 400;
+				width: 100%;
+				padding: 8px;
+				margin-bottom: 0px;
+				border-radius: 6px;
+				border: none;
+				background: transparent;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+
+			.record-build-art {
+				width: 256px;
+				text-align: center;
+			}
+
+			#builderAlbumArt {
+				width: 100%;
+				height: auto;
+				border-radius: 6px;
+				border: 1px solid #ccc;
+				margin-bottom: 8px;
+			}
+
+			.album-art-buttons {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+			}
+
+			#editableTrackList {
+				list-style: none;
+				padding: 0;
+				margin-top: 10px;
+			}
+
+			#editableTrackList li {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+				margin-bottom: 8px;
+			}
+
+			#editableTrackList input {
+				flex: 1;
+				padding: 3px 10px;
+				border: none;
+				background: transparent;
+				border-radius: 6px;
+			}
+
+			#editableTrackList {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+
+			.builder-track-row {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+			}
+
+			.builder-track-row .track-number {
+				font-family: "Bodoni Moda", serif;
+				font-weight: 500;
+				min-width: 24px;
+				text-align: right;
+			}
+
+			.builder-track-row .track-edit {
+				flex: 1;
+				padding: 6px 10px;
+				font-family: "Outfit", sans-serif;
+				font-size: 14px;
+				border: 1px solid #ccc;
+				border-radius: 6px;
+			}
+
+			.record-build-footer {
+				display: flex;
+				justify-content: space-between;
+			}
+
+			#builderAlbumArt {
+				width: 100%;
+				height: auto;
+				border-radius: 6px;
+				border: 1px solid #888; /* Darker border for contrast */
+				background-color: #ffffff;
+				object-fit: cover;
+				display: block;
+				aspect-ratio: 1 / 1; /* Keeps it square */
+			}
+			
+			#recordInfoPanel {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				transform: translateX(120%); /* Start off-screen */
+				transition:
+					transform 0.5s ease;
+				width: 400px;
+				padding: 20px;
+				font-family: "Outfit", sans-serif;
+				font-weight: 200;
+				color: white;
+				border-radius: 10px;
+				overflow: hidden;
+				z-index: 10;
+				backdrop-filter: blur(8px);
+				background-color: rgba(0, 0, 0, 0.4); /* darker base for contrast */
+				box-shadow: 0 0 5px rgba(0, 0, 0, 0.25);
+			}
+
+			#recordInfoPanel::before {
+				content: '';
+				position: absolute;
+				top: 0; left: 0; right: 0; bottom: 0;
+				z-index: -2;
+				background-size: cover;
+				background-position: center;
+				background-repeat: no-repeat;
+				filter: blur(10px);
+				opacity: 0.5;
+				transition: background-image 0.3s ease;
+				pointer-events: auto;
+				background-image: var(--bg-image);
+			}
+
+			#recordInfoPanel::after {
+				content: '';
+				position: absolute;
+				top: 0; left: 0; right: 0; bottom: 0;
+				z-index: -1;
+				background: rgba(0, 0, 0, 0.5);
+				pointer-events: auto;
+			}
+
+			#recordInfoPanel.visible {
+				transform: translateX(0);
+			}
+
+			#recordInfoPanel.hidden {
+				transform: translateX(500);
+			}
+
+			.hidden {
+                display: none;
+            }
+			
+			#recordInfoPanel h1 {
+				margin: 0 0 0px 0;
+			}
+			
+			#recordInfoPanel h2 {
+				margin: 0 0 4px 0;
+			}
+			
+			#loadToPlayerBtn {
+				bottom: 20px;
+				left: 20px;
+			}
+
+			#changeSceneBtn {
+				bottom: 20px;
+				right: 20px;
+			}
+
+			#buttonRow {
+				display: flex;
+				justify-content: space-between;
+				gap: 10px;
+				margin-top: 15px;
+			}
+
+			#trackList {
+				font-family: "Outfit", sans-serif;
+				font-optical-sizing: auto;
+				font-weight: 150;
+				font-size: 16px;
+				line-height: 1.8;
+				list-style: none;
+				padding-left: 0;
+				margin: 0;
+			}
+
+			#trackList li {
+				display: flex;
+				align-items: flex-start;
+				gap: 8px;
+			}
+
+			.track-number {
+				font-family: "Bodoni Moda", serif;
+				font-weight: 500;
+				min-width: 20px;
+				text-align: right;
+				font-weight: 500;
+				cursor: grab;
+			}
+
+			.track-title {
+				flex: 1;
+			}
+
+			#trackEditorContainer {
+				margin-top: 0;
+			}
+
+			.sortable-ghost {
+				opacity: 0.5;
+				background: #cca3a3;
+			}
+
+			.delete-button {
+				background: none;
+				border: none;
+				font-size: 16px;
+				color: #a33;
+				font-weight: bold;
+				cursor: pointer;
+				opacity: 0;
+				transition: opacity 0.2s ease;
+			}
+
+			.builder-track-row:hover .delete-button {
+				opacity: 1;
+				}
+
+			#settingsPanel {
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: 400px;
+				padding: 20px;
+				background-color: rgba(255, 255, 255, 0.85);
+				color: #222;
+				border-radius: 12px;
+				backdrop-filter: blur(6px);
+				box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+				display: flex;
+				flex-direction: column;
+				gap: 20px;
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.25s ease;
+				z-index: 200; /* Ensure it appears above other panels */
+			}
+
+			#settingsPanel.visible {
+				opacity: 1;
+				pointer-events: auto;
+			}
+
+			.settings-option {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+
+			#libraryPanel {
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+<<<<<<< Updated upstream
+				width: 600px;
+				max-height: 80vh;
+=======
+				width: 1024px; /* Or desired width */
+				max-height: 80vh; /* Limit overall panel height */
+>>>>>>> Stashed changes
+				padding: 20px;
+				background-color: rgba(255, 255, 255, 0.85);
+				color: #222;
+				border-radius: 12px;
+				backdrop-filter: blur(6px);
+				box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+				display: flex; /* Use flexbox */
+				flex-direction: column; /* Stack children vertically */
+				/* gap: 20px; Removed gap, manage spacing internally */
+				overflow: hidden; /* Prevent panel itself from scrolling */
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.25s ease;
+				z-index: 100;
+			}
+
+			#libraryPanel h1 {
+				margin-bottom: 15px; /* Space below title */
+				flex-shrink: 0; /* Prevent header from shrinking */
+			}
+
+			#sortControls {
+				margin-bottom: 15px; /* Space below sort controls */
+				flex-shrink: 0; /* Prevent header from shrinking */
+			}
+
+			#libraryPanel.visible {
+				opacity: 1;
+				pointer-events: auto;
+			}
+
+			#libraryList {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				display: grid;
+				grid-template-columns: repeat(5, 1fr); /* Set exactly 5 columns */
+				grid-auto-rows: min-content; /* Size rows based on content */
+				gap: 20px; /* Increased gap */
+				overflow-y: auto; /* Enable vertical scrolling */
+				overflow-x: hidden; /* Disable horizontal scrolling */
+				flex-grow: 1; /* Allow list to take available space */
+				padding-right: 10px; /* Add padding for scrollbar */
+				padding-bottom: 10px; /* Add some padding at the bottom */
+				align-items: start; /* Align items to the start of their grid cell vertically */
+			}
+
+			/* --- Custom Scrollbar Styles --- */
+			#libraryList::-webkit-scrollbar {
+				width: 8px; /* Width of the scrollbar */
+			}
+
+			#libraryList::-webkit-scrollbar-track {
+				background: rgba(0, 0, 0, 0); /* Track color */
+				border-radius: 4px;
+			}
+
+			#libraryList::-webkit-scrollbar-thumb {
+				background-color: rgba(70, 70, 70, 0.3); /* Thumb color */
+				border-radius: 4px;
+				border: 2px solid transparent; /* Creates padding around thumb */
+				background-clip: content-box;
+			}
+
+			#libraryList::-webkit-scrollbar-thumb:hover {
+				background-color: rgba(70, 70, 70, 0.5); /* Thumb color on hover */
+			}
+			/* --- End Custom Scrollbar Styles --- */
+
+			/* --- Adjust Styles for Library Items --- */
+			.library-item {
+				display: flex;
+				flex-direction: column; /* Stack image and info vertically */
+				align-items: center; /* Center items horizontally */
+				text-align: center;
+				cursor: pointer;
+				transition: background-color 0.2s ease, scale 0.2s ease;
+				min-height: 0;
+				/* Ensure the item itself doesn't overflow */
+				overflow: hidden;
+				/* Add padding for hover effect */
+				padding: 5px;
+				border-radius: 4px;
+			}
+
+			.library-item:hover {
+				background-color: rgba(255, 255, 255, 0.1); /* Subtle hover background */
+				scale: 1.05; /* Slightly scale up on hover */
+			}
+
+			.library-item.selected {
+				/* Remove background and outline from the item itself */
+				background-color: transparent;
+				outline: none;
+			}
+
+			.library-item.selected img {
+				/* Apply outline directly to the image when selected */
+				outline: 3px solid #E6AB0F; /* Yellow stroke */
+				outline-offset: -3px; /* Place outline inside the image bounds */
+				border-radius: 6px; /* Ensure outline follows image rounding */
+			}
+
+			.library-item img {
+				width: 100%; /* Make image fill the tile width */
+				height: auto; /* Height determined by aspect ratio */
+				aspect-ratio: 1 / 1; /* Keep it square */
+				object-fit: cover; /* Cover the area, cropping if needed */
+				margin-bottom: 8px; /* Space between image and text */
+				display: block; /* Remove potential extra space below image */
+				border-radius: 6px; /* Apply rounded corners directly to the image */
+				/* Add transition for outline */
+				transition: outline 0.1s ease-in-out;
+			}
+
+			.library-item-title {
+				font-weight: 600; /* Bold */
+				font-size: 1em;
+				margin-bottom: 2px; /* Small space between title and artist */
+			}
+
+			.library-item-info {
+				display: flex;
+				flex-direction: column;
+				width: 100%; /* Take full width for text alignment */
+				padding: 0 5px 5px 5px; /* Padding for text */
+				height: 44px; /* Set fixed height */
+				justify-content: flex-start; /* Align text to top */
+				box-sizing: border-box; /* Ensure padding is included in height */
+				overflow: hidden; /* Hide any text that overflows the fixed height */
+			}
+
+			.library-item-title,
+			.library-item-artist {
+				white-space: nowrap; /* Prevent text wrapping */
+				overflow: hidden; /* Hide overflow */
+				text-overflow: ellipsis; /* Add ellipsis for overflow */
+				width: 100%; /* Ensure text takes full width for ellipsis */
+			}
+
+			/* --- End Library Item Styles --- */
+
+			.library-footer {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-top: 15px;
+				padding-top: 15px;
+				border-top: 1px solid #ddd;
+				flex-shrink: 0; /* Prevent footer from shrinking */
+			}
+
+			.overlay {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(0, 0, 0, 0.5);
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.25s ease;
+				z-index: 199; /* Ensure it appears below the settings panel but above other elements */
+			}
+
+			.overlay.visible {
+				opacity: 1;
+				pointer-events: auto;
+			}
+<<<<<<< Updated upstream
+		</style>
+		<script type="module" crossorigin src="./assets/index-Duaeh8Kw.js"></script>
+=======
+
+			body.is-electron #fetchMetadataBtn {
+				display: none; /* Hide fetch button in Electron */
+			}
+
+			#draggable-top-bar {
+				position: absolute;
+				top: 0;
+				left: 100px;
+				width: 100%;
+				height: 5vh; /* 10% of viewport height */
+				-webkit-app-region: drag; /* Make this region draggable */
+				z-index: 1; /* Ensure it's below buttons */
+			}
+
+			#buildRecordBtnContainer,
+			#libraryBtnContainer,
+			#changeSceneBtnContainer,
+			#settingsBtnContainer {
+				position: absolute;
+				z-index: 199; /* Higher z-index than draggable bar */
+			}
+
+			#settingsBtnContainer {
+				top: 10px;
+				left: 10px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
+
+			#buildRecordBtnContainer {
+				bottom: 30px;
+				left: 10px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
+
+			#libraryBtnContainer {
+				bottom: 30px;
+				left: 75px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
+
+			#changeSceneBtnContainer {
+				bottom: 30px;
+				right: 10px;
+				width: 50px;
+				height: 50px;
+				overflow: visible;
+			}
+		</style>
+		<script type="module" crossorigin src="./assets/index-DAZXJyjj.js"></script>
+>>>>>>> Stashed changes
+	</head>
+	<body>
+		<div id="recordBuildPanel" class="hidden">
+			<div class="record-build-header">
+			  <div class="record-build-info">
+				<input id="builderTitle" type="text" placeholder="Record Title" />
+				<input id="builderArtist" type="text" placeholder="Artist" />
+				<div id="trackEditorContainer">
+					<p id="noTracksMsg">Load tracks to begin</p>
+					<ul id="editableTrackList"></ul>
+					<button id="loadTracksToBuilderBtn" class="ui-button">Add track(s)</button>
+				  </div>
+			  </div>
+			  <div class="record-build-art">
+				<img id="builderAlbumArt" src="defaultArt.png" alt="Album Art" />
+				<div class="album-art-buttons">
+				  <button id="fetchMetadataBtn" class="ui-button">Fetch from metadata</button>
+				  <button id="uploadArtBtn" class="ui-button">Load Art...</button>
+				</div>
+			  </div>
+			</div>		  
+			<div class="record-build-footer">
+			  <button id="addRecordBtn" class="ui-button">Add to library</button>
+			  <button id="cancelBuildBtn" class="ui-button">Cancel</button>
+			</div>
+		  </div>
+		<div id="recordInfoPanel" class="panel">
+			<h1 id="albumTitle">Album title</h1>
+			<h2 id="artistName">Artist</h2>
+			<ul id="trackList"></ul>
+			<div id="buttonRow">
+				<button id="loadToPlayerBtn" class="ui-button-light">Load to player</button>
+				<button id="editRecordBtn" class="ui-button-light">Edit</button>
+				<button id="closePanelBtn" class="ui-button-light">Close</button>
+			</div>
+		  </div>
+		
+		<div id="buildRecordBtnContainer" style="bottom: 30px; left: 0px; position: absolute; width: 50px; height: 50px; overflow: visible;">
+			<canvas id="buildRecordBtnCanvas" width="80" height="80"></canvas>
+		</div>
+		<div id="libraryBtnContainer" style="bottom: 30px; left: 65px; position: absolute; width: 50px; height: 50px; overflow: visible;">
+			<canvas id="libraryBtnCanvas" width="80" height="80"></canvas>
+		</div>
+		<div id="changeSceneBtnContainer" style="bottom: 30px; right: 30px; position: absolute; width: 50px; height: 50px; overflow: visible;">
+			<canvas id="changeSceneBtnCanvas" width="80" height="80"></canvas>
+		</div>
+		<div id="settingsBtnContainer" style="top: 0px; left: 0px; position: absolute; width: 50px; height: 50px; overflow: visible;">
+			<canvas id="settingsBtnCanvas" width="80" height="80"></canvas>
+		</div>
+
+		<div id="settingsPanel" class="hidden">
+			<h1>Settings</h1>
+			<div class="settings-option">
+				<label>
+					<input type="checkbox" id="togglePostProcessing" />
+					Enable Post Processing
+				</label>
+			</div>
+			<div class="settings-option">
+				<label>
+					<input type="checkbox" id="toggleAntialiasing" />
+					Enable Antialiasing
+				</label>
+			</div>
+			<div class="settings-option">
+				<label>
+					Volume (Crackle):
+					<input type="range" id="crackleVolumeSlider" min="0" max="1" step="0.01" />
+				</label>
+			</div>
+<<<<<<< Updated upstream
+			<button id="closeSettingsBtn" class="ui-button">Close</button>
+=======
+			<button id="closeSettingsBtn" class="ui-button">Close panel</button>
+			<button id="exitAppBtn" class="ui-button-exit">Exit app</button>
+>>>>>>> Stashed changes
+		</div>
+
+		<div id="libraryPanel" class="hidden">
+			<h1>Library</h1>
+			<div id="sortControls" class="sort-controls">
+				<label>
+					<input type="radio" name="sortBy" value="artist" id="sortByArtist" checked /> Artist
+				</label>
+				<label>
+					<input type="radio" name="sortBy" value="album" id="sortByAlbum" /> Album
+				</label>
+				<label>
+					<input type="checkbox" id="sortOrderToggle" /> Descending
+				</label>
+			</div>
+			<ul id="libraryList">
+				<!-- Library items will be populated here -->
+			</ul>
+			<div class="library-footer">
+				<div id="libraryActions">
+					<button id="libraryLoadBtn" class="ui-button" disabled>Load</button>
+					<button id="libraryEditBtn" class="ui-button" disabled>Edit</button>
+					<button id="libraryDeleteBtn" class="ui-button" disabled>Delete</button>
+				</div>
+				<button id="closeLibraryBtn" class="ui-button">Close</button>
+			</div>
+		</div>
+
+		<div id="overlay" class="overlay"></div>
+			<script src="https://unpkg.com/@rive-app/webgl2"></script>
+	</body>
+</html>
+
