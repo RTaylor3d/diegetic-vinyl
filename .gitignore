@@ -6,3 +6,4 @@ release-build/turntable-app-win32-x64/turntable-app.exe
 node_modules
 /node_modules
 /release-build
+/node_modules

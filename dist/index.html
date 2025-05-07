@@ -12,6 +12,7 @@
 				font-family: "Outfit", sans-serif;
 				font-weight: 200;
 				overflow: hidden; /* Prevent scrollbars */
+				position: relative; /* Needed for absolute positioning of children */
 			}
 
 			h1 {
@@ -349,7 +350,7 @@
 				overflow: hidden;
 				z-index: 10;
 				backdrop-filter: blur(8px);
-				background-color: rgba(0, 0, 0, 0.4); /* darker base for contrast */
+				background-color: rgba(255, 255, 255, 0.5);
 				box-shadow: 0 0 5px rgba(0, 0, 0, 0.25);
 			}
 
@@ -505,13 +506,8 @@
 				top: 50%;
 				left: 50%;
 				transform: translate(-50%, -50%);
-<<<<<<< Updated upstream
-				width: 600px;
-				max-height: 80vh;
-=======
 				width: 1024px; /* Or desired width */
 				max-height: 80vh; /* Limit overall panel height */
->>>>>>> Stashed changes
 				padding: 20px;
 				background-color: rgba(255, 255, 255, 0.85);
 				color: #222;
@@ -674,17 +670,13 @@
 				opacity: 0;
 				pointer-events: none;
 				transition: opacity 0.25s ease;
-				z-index: 199; /* Ensure it appears below the settings panel but above other elements */
+				z-index: 198; /* Ensure it appears below the settings panel but above other elements */
 			}
 
 			.overlay.visible {
 				opacity: 1;
 				pointer-events: auto;
 			}
-<<<<<<< Updated upstream
-		</style>
-		<script type="module" crossorigin src="./assets/index-Duaeh8Kw.js"></script>
-=======
 
 			body.is-electron #fetchMetadataBtn {
 				display: none; /* Hide fetch button in Electron */
@@ -741,9 +733,9 @@
 			}
 		</style>
 		<script type="module" crossorigin src="./assets/index-DAZXJyjj.js"></script>
->>>>>>> Stashed changes
 	</head>
 	<body>
+		<div id="draggable-top-bar"></div>
 		<div id="recordBuildPanel" class="hidden">
 			<div class="record-build-header">
 			  <div class="record-build-info">
@@ -788,7 +780,7 @@
 		<div id="changeSceneBtnContainer" style="bottom: 30px; right: 30px; position: absolute; width: 50px; height: 50px; overflow: visible;">
 			<canvas id="changeSceneBtnCanvas" width="80" height="80"></canvas>
 		</div>
-		<div id="settingsBtnContainer" style="top: 0px; left: 0px; position: absolute; width: 50px; height: 50px; overflow: visible;">
+		<div id="settingsBtnContainer" style="top: 0px; left: 0px; position: absolute; width: 50px; height: 50px; overflow: visible; z-index: 199;">
 			<canvas id="settingsBtnCanvas" width="80" height="80"></canvas>
 		</div>
 
@@ -812,12 +804,8 @@
 					<input type="range" id="crackleVolumeSlider" min="0" max="1" step="0.01" />
 				</label>
 			</div>
-<<<<<<< Updated upstream
-			<button id="closeSettingsBtn" class="ui-button">Close</button>
-=======
 			<button id="closeSettingsBtn" class="ui-button">Close panel</button>
 			<button id="exitAppBtn" class="ui-button-exit">Exit app</button>
->>>>>>> Stashed changes
 		</div>
 
 		<div id="libraryPanel" class="hidden">
