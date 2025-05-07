@@ -17,6 +17,23 @@ import * as rive from "@rive-app/webgl2";
 const isElectron = !!window.electronAPI;
 let userDataPath = ''; // Will be fetched if in Electron
 
+let mm = null;
+if (!isElectron && typeof window !== "undefined") {
+    // Polyfill Buffer if needed
+    if (typeof window.Buffer === "undefined") {
+        import('buffer').then(buf => {
+            window.Buffer = buf.Buffer;
+        });
+    }
+    // Import music-metadata-browser at top-level
+    import('music-metadata-browser').then(module => {
+        mm = module.parseBlob;
+    }).catch(e => {
+        mm = null;
+        console.warn("music-metadata-browser could not be loaded, metadata will be skipped.", e);
+    });
+}
+
 // Add class to body if in Electron
 if (isElectron) {
     document.body.classList.add('is-electron');
@@ -24,6 +41,14 @@ if (isElectron) {
 
 // Helper to get basename
 const getBasename = (filePath) => filePath.split(/[\\/]/).pop();
+
+// --- BEGIN PATCH: Polyfill Buffer for music-metadata-browser in browser ---
+if (!isElectron && typeof window !== "undefined" && typeof window.Buffer === "undefined") {
+    import('buffer').then(buf => {
+        window.Buffer = buf.Buffer;
+    });
+}
+// --- END PATCH ---
 
 // Set up variables
 var isTransitioning = false;
@@ -36,7 +61,7 @@ let environment = null;
 const clock = new THREE.Clock();
 const textureLoader = new THREE.TextureLoader();
 var rpm = 0;
-var recordSpeed = 45;
+var recordSpeed = 33;
 var rpmTarget = 0;
 var rpmMulti = 0;
 var angularVelocity = (rpm * 2 * Math.PI) / 60;
@@ -84,6 +109,8 @@ var armInitialX = 0;
 var armSpeed = 0;
 var armStart = -0.540;
 var armEnd = -0.834;
+let warpOffsetYaw = 0;
+let warpOffsetPitch = 0;
 var normalizedRotation;
 var dialPos1 = Math.PI / 4.8;  // 33 RPM (2 o'clock)
 var dialPos2 = 0;              // STOP (3 o'clock, default)
@@ -181,32 +208,32 @@ class NewRecord {
 
 var ambCrackle = new Howl({
     src: ['./vinyl-crackle-33rpm-6065.mp3'],
-    rate: 1, 
-    volume: 0.5,
+    rate: 1,
+    volume: 0.6,
     loop: true,
     html5: false // Ensure Web Audio API
 });
 
 var crackleEnd1 = new Howl({
     src: ['./record_end_01.mp3'],
-    rate: 1, 
-    volume: 0.4,
+    rate: rpm / 45, 
+    volume: 0.5,
     loop: true,
     html5: false // Ensure Web Audio API
 });
 
 var crackleEnd2 = new Howl({
     src: ['./record_end_02.mp3'],
-    rate: 1, 
-    volume: 0.4,
+    rate: rpm / 45, 
+    volume: 0.5,
     loop: true,
     html5: false // Ensure Web Audio API
 });
 
 var crackleEnd3 = new Howl({
     src: ['./record_end_03.mp3'],
-    rate: 1, 
-    volume: 0.4,
+    rate: rpm / 45, 
+    volume: 0.5,
     loop: true,
     html5: false // Ensure Web Audio API
 });
@@ -408,10 +435,16 @@ async function loadData() {
         initialSettingsLoaded = true;
         initialLibraryLoaded = true; // Mark as "read" (no file to read)
         rawLoadedLibraryData = null; // Ensure it's null
-        // Environment already loaded above
+
+        // --- FIX: Ensure environment is created in browser ---
+        if (!environment) {
+            environment = new Environment(scene, envNum);
+            environment.lights = environment.getLights(envNum);
+            environment.changeScene(intMan, moveCam);
+        }
+        // --- END FIX ---
+
         checkInitialLoadComplete(); // Check if meshes are ready
-        // Attempt to set initial scene (will position records if ready)
-        // setInitialScene(); // setInitialScene is called by checkInitialLoadComplete
         return;
     }
 
@@ -630,6 +663,14 @@ async function setInitialScene() { // <<<< Make async
     }
     console.log("Setting initial scene...");
 
+    // --- FIX: Ensure environment is created if not already (for browser) ---
+    if (!environment) {
+        environment = new Environment(scene, envNum);
+        environment.lights = environment.getLights(envNum);
+        environment.changeScene(intMan, moveCam);
+    }
+    // --- END FIX ---
+
     // If raw library data exists, process it now.
     // This ensures meshes are created when base sleeve/sleeveHit models are loaded.
     if (rawLoadedLibraryData && rawLoadedLibraryData.length > 0) {
@@ -736,13 +777,46 @@ document.getElementById("loadTracksToBuilderBtn").addEventListener("click", asyn
                          title = match[2] || file.name;
                      }
                 }
+            } else if (mm) {
+                // --- PATCH: Use music-metadata-browser in web ---
+                const metadata = await mm(file);
+                if (metadata && metadata.common) {
+                    title = metadata.common.title || file.name;
+                    trackNumber = metadata.common.track && metadata.common.track.no ? metadata.common.track.no : null;
+
+                    if (tempTrackNames.length === 0) {
+                        if (metadata.common.album) {
+                            document.getElementById("builderTitle").value = metadata.common.album;
+                        }
+                        if (metadata.common.artist) {
+                            document.getElementById("builderArtist").value = metadata.common.artist;
+                        }
+                    }
+
+                    if (!albumArtSet && metadata.common.picture && metadata.common.picture.length > 0) {
+                        const image = metadata.common.picture[0];
+                        const blob = new Blob([image.data], { type: image.format });
+                        const blobUrl = URL.createObjectURL(blob);
+                        document.getElementById("builderAlbumArt").src = blobUrl;
+                        recordBuilder.art = { data: new Uint8Array(image.data), format: image.format };
+                        albumArtSet = true;
+                    }
+                } else {
+                    // fallback to filename parsing
+                    const match = file.name.match(/^(\d+)?\s*-\s*(.+)\.\w+$/);
+                    if (match) {
+                        trackNumber = match[1] ? parseInt(match[1]) : null;
+                        title = match[2] || file.name;
+                    }
+                }
+                // --- END PATCH ---
             } else {
-                 console.warn("Web environment: Metadata parsing via parseBlob is currently disabled. Using filename parsing.");
-                 const match = file.name.match(/^(\d+)?\s*-\s*(.+)\.\w+$/);
-                 if (match) {
-                     trackNumber = trackNumber ?? (match[1] ? parseInt(match[1]) : null);
-                     title = title || match[2] || file.name;
-                 }
+                // fallback to filename parsing
+                const match = file.name.match(/^(\d+)?\s*-\s*(.+)\.\w+$/);
+                if (match) {
+                    trackNumber = trackNumber ?? (match[1] ? parseInt(match[1]) : null);
+                    title = title || match[2] || file.name;
+                }
             }
         } catch (metaError) {
             console.warn(`Could not parse metadata for ${file.name}:`, metaError);
@@ -1166,9 +1240,11 @@ const updateRpm = fpsLimiter(20, (now) => {
             ambCrackle.rate(rpmMulti);
         }
         if(endCrackle && endCrackle.playing()){
-            endCrackle.rate(rpmMulti);
+            endCrackle.rate(rpm / 45);
         }
     }  
+
+
     angularVelocity = (rpm * 2 * Math.PI) / 60;
     posInRecord = norm(yawBone.rotation.y, armStart, armEnd); 
 });
@@ -1621,7 +1697,14 @@ function render() {
                 needleOverRecord = true;
             }
 
-            const canAutoMove = !needleLifted && !isDragging && dragTarget !== toneArm && audioLoaded && trackQueue.length > 0;
+            const canAutoMove = (
+                !needleLifted && 
+                !isDragging && 
+                dragTarget !== toneArm 
+                && audioLoaded 
+                && trackQueue.length > 0 
+                && rpm > 1
+            );
 
             if (canAutoMove && trackQueue && trackQueue[currentTrackIndex]) {
                 const currentTrack = trackQueue[currentTrackIndex];
@@ -1666,23 +1749,41 @@ function render() {
         platter.rotation.y -= angularVelocity * deltaTime;
         record.rotation.y -= angularVelocity * deltaTime;
 
-        if (yawBone.rotation.y < armStart && dragTarget != toneArm && trackQueue && trackQueue.length > 0) {
+        if (yawBone.rotation.y < armStart && yawBone.rotation.y > armEnd && dragTarget != toneArm && trackQueue && trackQueue.length > 0 && rpm > 1) {
             normalizedRotation = (record.rotation.y % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-
+        
+            // Smaller values for gentle movement
+            const yawAmount = 0.000001 * (1.7 - posInRecord);
+            const pitchAmount = 0.000075 * (1.1 - (posInRecord * 0.75));
+        
             if (normalizedRotation < 6.2 && normalizedRotation > 3.1) {
-                yawBone.rotation.y -= (((0.01 * deltaTime) * rpmMulti) * 0.2) * (1.7 - posInRecord);
+                warpOffsetYaw -= yawAmount;
             }
             if (normalizedRotation < 3.1 && normalizedRotation > 0) {
-                yawBone.rotation.y += (((0.01 * deltaTime) * rpmMulti) * 0.2) * (1.7 - posInRecord);
+                warpOffsetYaw += yawAmount;
             }
-
+        
             if (normalizedRotation < 6 && normalizedRotation > 5.3) {
-                pitchBone.rotation.x -= (((0.1 * deltaTime) * rpmMulti) * 0.5) * (1.1 - posInRecord);
+                warpOffsetPitch -= pitchAmount;
             }
             if (normalizedRotation < 5.3 && normalizedRotation > 4.6) {
-                pitchBone.rotation.x += (((0.1 * deltaTime) * rpmMulti) * 0.5) * (1.1 - posInRecord);
+                warpOffsetPitch += pitchAmount;
             }
+        
+            // Clamp offsets to prevent runaway drift
+            warpOffsetYaw = THREE.MathUtils.clamp(warpOffsetYaw, -0.01, 0.01);
+            warpOffsetPitch = THREE.MathUtils.clamp(warpOffsetPitch, -0.02, 0.02);
+
+
+            
+        } else {
+            // Gradually return to zero when not warping
+            warpOffsetYaw = THREE.MathUtils.lerp(warpOffsetYaw, 0, 0.05);
+            warpOffsetPitch = THREE.MathUtils.lerp(warpOffsetPitch, 0, 0.05);
         }
+
+        yawBone.rotation.y += warpOffsetYaw;
+        pitchBone.rotation.x += warpOffsetPitch;
     }
 
     if(toneArmView){

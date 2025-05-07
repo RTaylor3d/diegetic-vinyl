@@ -231,7 +231,7 @@ class Environment {
         if(scene === 2){
             // Scene 2 (living room)
             const scene2Light1 = new THREE.DirectionalLight(0xede2b4, 11)
-            scene2Light1.position.set(5.6, 1.7, 6.3);
+            scene2Light1.position.set(5.6, 1.1, 6.3);
             scene2Light1.castShadow = true;
             scene2Light1.shadow.mapSize.width = 2048;
             scene2Light1.shadow.mapSize.height = 2048;
