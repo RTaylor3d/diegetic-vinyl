@@ -247,7 +247,7 @@ const renderer = new THREE.WebGLRenderer({antialias:false});
 renderer.outputColorspace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x212121);
-renderer.setPixelRatio(window.devicePixelRatio * 2);
+renderer.setPixelRatio(window.devicePixelRatio * 1.5);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -463,8 +463,8 @@ async function loadData() {
             console.log("Loaded settings:", loadedSettings);
             envNum = loadedSettings.envNum;
             postProcessEnabled = loadedSettings.postProcessEnabled ?? postProcessEnabled;
-            const aaEnabled = loadedSettings.antialiasingEnabled ?? (renderer.getPixelRatio() > 1.25);
-            renderer.setPixelRatio(window.devicePixelRatio * (aaEnabled ? 2.0 : 1));
+            const aaEnabled = loadedSettings.antialiasingEnabled ?? (renderer.getPixelRatio() > 1);
+            renderer.setPixelRatio(window.devicePixelRatio * (aaEnabled ? 1.5 : 1));
             const crackleVolume = loadedSettings.crackleVolume ?? ambCrackle.volume();
             ambCrackle.volume(crackleVolume);
             crackleEnd1.volume(crackleVolume * 0.8);
@@ -2239,6 +2239,10 @@ function onMouseUp(event) {
         clearTimeout(mouseReleasedTimeout);
         mouseReleasedTimeout = setTimeout(() => {
             needleLifted = false;
+            // --- FIX: If recordEnded, allow playback to resume on tonearm drop ---
+            if (recordEnded) {
+                recordEnded = false;
+            }
         }, 250);
     }
     isDragging = false;
