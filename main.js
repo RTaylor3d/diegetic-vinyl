@@ -92,6 +92,7 @@ var isDragging = false;
 var mouseActive = false;
 var camMoving = false;
 var mouseActiveTimeout;
+var mouseReleasedTimeout;
 var powerDownDelay = 15000;
 var dragStarted = false;
 var isSeeking = false;
@@ -312,6 +313,7 @@ loader.load('AT-LP5_v02.glb', (gltf) => {
         isDragging = true;
         dragTarget = toneArm;
         controls.enableRotate = false;
+        needleLifted = true;
     
         // Create a quaternion representing a local rotation around the x-axis
         let targetQuat = new THREE.Quaternion();
@@ -1251,6 +1253,7 @@ const updateRpm = fpsLimiter(20, (now) => {
 
 const updateNonDeltaTone = fpsLimiter(15, (now) => {
     if(rpm < 0.1) return;
+    /*
     if(pitchBone.rotation.x > -1.58){
         needleLifted = false;
         
@@ -1258,6 +1261,7 @@ const updateNonDeltaTone = fpsLimiter(15, (now) => {
         needleLifted = true;
         recordEnded = false;
     }
+    */
     if(trackQueue && trackQueue.length > 0 && yawBone.rotation.y < armStart + 0.02 && !needleLifted && rpm > 1 && !recordEnded && rpmMulti > 0.01){
         if(!ambCrackle.playing()){
             ambCrackle.seek(Math.random() * ambCrackle.duration());
@@ -2232,6 +2236,10 @@ function onMouseUp(event) {
     }
     if(rpm > 1 && trackQueue && trackQueue.length > 0 && totalDuration > 0){
         seekToPosition();
+        clearTimeout(mouseReleasedTimeout);
+        mouseReleasedTimeout = setTimeout(() => {
+            needleLifted = false;
+        }, 250);
     }
     isDragging = false;
     dragTarget = null;
