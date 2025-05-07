@@ -1757,8 +1757,8 @@ function render() {
             normalizedRotation = (record.rotation.y % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
         
             // Smaller values for gentle movement
-            const yawAmount = 0.000001 * (1.7 - posInRecord);
-            const pitchAmount = 0.000075 * (1.1 - (posInRecord * 0.75));
+            const yawAmount = 0.000001 * (1.7 - posInRecord) * deltaTime * 60;
+            const pitchAmount = 0.000075 * (1.1 - (posInRecord * 0.75)) * deltaTime * 60;
         
             if (normalizedRotation < 6.2 && normalizedRotation > 3.1) {
                 warpOffsetYaw -= yawAmount;
@@ -2160,6 +2160,7 @@ function seekToPosition() {
     isSeeking = true;
 
     // posInRecord is updated in updateRpm and clamped by updateNonDeltaTone, should be [0,1]
+    let clampedPos = THREE.MathUtils.clamp(posInRecord, 0, 1);
     let globalTime = posInRecord * totalDuration;
 
     let trackIndex = -1;
@@ -2167,6 +2168,11 @@ function seekToPosition() {
         trackIndex = trackStartTimes.findIndex((startTime, i) =>
             globalTime >= startTime && (i === trackStartTimes.length - 1 || globalTime < trackStartTimes[i + 1])
         );
+    }
+
+    if (trackIndex === -1) {
+        trackIndex = 0;
+        globalTime = 0;
     }
 
     if (trackIndex !== -1 && trackQueue[trackIndex]) {
@@ -2234,17 +2240,21 @@ function onMouseUp(event) {
     if(controlsEnabled){
         controls.enableRotate = true;
     }
-    if(rpm > 1 && trackQueue && trackQueue.length > 0 && totalDuration > 0){
-        seekToPosition();
-        clearTimeout(mouseReleasedTimeout);
-        mouseReleasedTimeout = setTimeout(() => {
-            needleLifted = false;
-            // --- FIX: If recordEnded, allow playback to resume on tonearm drop ---
-            if (recordEnded) {
-                recordEnded = false;
-            }
-        }, 250);
-    }
+    clearTimeout(mouseReleasedTimeout);
+    mouseReleasedTimeout = setTimeout(() => {
+        needleLifted = false;
+        if(rpm > 1 && trackQueue && trackQueue.length > 0 && totalDuration > 0){
+            seekToPosition();
+        }
+        if(needleOverRecord){
+            pitchTarget.copy(pitchBone.quaternion);
+            pitchBone.rotation.x += warpOffsetPitch;
+        }
+        // --- FIX: If recordEnded, allow playback to resume on tonearm drop ---
+        if (recordEnded) {
+            recordEnded = false;
+        }
+    }, 250);
     isDragging = false;
     dragTarget = null;
 
